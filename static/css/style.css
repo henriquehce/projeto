@@ -499,7 +499,6 @@ body {
 }
 .task-card:hover::before { background: var(--accent); }
 
-.task-card.status-nao { }
 .task-card.status-nao::before { background: var(--text-dim); }
 .task-card.status-andamento::before { background: var(--yellow); }
 .task-card.status-finalizado::before { background: var(--green); }
