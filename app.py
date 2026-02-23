@@ -4,6 +4,7 @@ from flask_cors import CORS
 from datetime import datetime
 from functools import wraps
 import bcrypt
+import re
 import os
 
 # Carrega variaveis do .env automaticamente (so em desenvolvimento)
@@ -18,7 +19,6 @@ except ImportError:
 # ─────────────────────────────────────────
 def get_database_url():
     url = os.environ.get('DATABASE_URL', 'sqlite:///taskflow.db')
-    # Supabase/Heroku entregam 'postgres://' mas SQLAlchemy exige 'postgresql://'
     if url.startswith('postgres://'):
         url = url.replace('postgres://', 'postgresql://', 1)
     return url
@@ -28,7 +28,6 @@ app.config['SECRET_KEY']                     = os.environ.get('SECRET_KEY', 'tas
 app.config['SQLALCHEMY_DATABASE_URI']        = get_database_url()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Seguranca extra em producao
 if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_SECURE']   = True
     app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -52,6 +51,33 @@ from flask_migrate import Migrate
 migrate = Migrate(app, db)
 
 # ─────────────────────────────────────────
+# VALIDAÇÃO DE SENHA FORTE
+# ─────────────────────────────────────────
+def validar_senha_forte(senha):
+    """
+    Retorna (True, None) se a senha for válida.
+    Retorna (False, mensagem_de_erro) se não for.
+    Regras:
+      - Mínimo 8 caracteres
+      - Pelo menos 1 letra maiúscula
+      - Pelo menos 1 letra minúscula
+      - Pelo menos 1 número
+      - Pelo menos 1 caractere especial (!@#$%^&*...)
+    """
+    if len(senha) < 8:
+        return False, 'A senha deve ter pelo menos 8 caracteres'
+    if not re.search(r'[A-Z]', senha):
+        return False, 'A senha deve conter pelo menos 1 letra maiúscula'
+    if not re.search(r'[a-z]', senha):
+        return False, 'A senha deve conter pelo menos 1 letra minúscula'
+    if not re.search(r'\d', senha):
+        return False, 'A senha deve conter pelo menos 1 número'
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>\-_=+\[\]\\;\'`~/]', senha):
+        return False, 'A senha deve conter pelo menos 1 caractere especial (!@#$%^&* etc.)'
+    return True, None
+
+
+# ─────────────────────────────────────────
 # MODELOS
 # ─────────────────────────────────────────
 
@@ -63,11 +89,9 @@ class Usuario(db.Model):
     email         = db.Column(db.String(150), unique=True, nullable=False)
     senha_hash    = db.Column(db.String(255), nullable=False)
     tipo_perfil   = db.Column(db.String(20), nullable=False)
-    # Força troca de senha no primeiro acesso (quando Admin define a senha)
     trocar_senha  = db.Column(db.Boolean, default=False)
     comentarios   = db.relationship('Comentario', backref='autor', lazy=True)
 
-    # ── helpers de senha ──
     def definir_senha(self, senha_plain):
         self.senha_hash = bcrypt.hashpw(
             senha_plain.encode('utf-8'),
@@ -211,6 +235,22 @@ def me():
 
 
 # ─────────────────────────────────────────
+# ROTA — Regras de senha (para o frontend exibir)
+# ─────────────────────────────────────────
+@app.route('/api/senha-regras', methods=['GET'])
+def senha_regras():
+    return jsonify({
+        'regras': [
+            'Mínimo de 8 caracteres',
+            'Pelo menos 1 letra maiúscula',
+            'Pelo menos 1 letra minúscula',
+            'Pelo menos 1 número',
+            'Pelo menos 1 caractere especial (!@#$%^&* etc.)'
+        ]
+    })
+
+
+# ─────────────────────────────────────────
 # TROCAR SENHA (colaborativo troca a própria)
 # ─────────────────────────────────────────
 
@@ -225,8 +265,9 @@ def trocar_senha():
     if not senha_atual or not senha_nova or not senha_conf:
         return jsonify({'erro': 'Preencha todos os campos'}), 400
 
-    if len(senha_nova) < 6:
-        return jsonify({'erro': 'A nova senha deve ter pelo menos 6 caracteres'}), 400
+    valida, erro = validar_senha_forte(senha_nova)
+    if not valida:
+        return jsonify({'erro': erro}), 400
 
     if senha_nova != senha_conf:
         return jsonify({'erro': 'A confirmação de senha não confere'}), 400
@@ -255,11 +296,13 @@ def redefinir_senha(uid):
         return jsonify({'erro': 'Usuário não encontrado'}), 404
 
     nova_senha = request.json.get('senha_nova', '')
-    if len(nova_senha) < 6:
-        return jsonify({'erro': 'A senha deve ter pelo menos 6 caracteres'}), 400
+
+    valida, erro = validar_senha_forte(nova_senha)
+    if not valida:
+        return jsonify({'erro': erro}), 400
 
     usuario.definir_senha(nova_senha)
-    usuario.trocar_senha = True   # força troca no próximo login
+    usuario.trocar_senha = True
     db.session.commit()
 
     return jsonify({'mensagem': f'Senha de {usuario.nome} redefinida. Ela deverá trocá-la no próximo acesso.'}), 200
@@ -292,8 +335,9 @@ def criar_usuario():
     if dados['tipo_perfil'] not in ['Administrador', 'Colaborativo']:
         return jsonify({'erro': 'tipo_perfil inválido'}), 400
 
-    if len(dados['senha']) < 6:
-        return jsonify({'erro': 'A senha deve ter pelo menos 6 caracteres'}), 400
+    valida, erro = validar_senha_forte(dados['senha'])
+    if not valida:
+        return jsonify({'erro': erro}), 400
 
     if Usuario.query.filter_by(email=dados['email'].lower()).first():
         return jsonify({'erro': 'E-mail já cadastrado'}), 409
@@ -303,7 +347,7 @@ def criar_usuario():
         funcao=dados['funcao'],
         email=dados['email'].lower(),
         tipo_perfil=dados['tipo_perfil'],
-        trocar_senha=True  # colaborativo troca no primeiro acesso
+        trocar_senha=True
     )
     novo.definir_senha(dados['senha'])
     db.session.add(novo)
@@ -327,6 +371,16 @@ def excluir_usuario(uid):
 # ─────────────────────────────────────────
 # TAREFAS
 # ─────────────────────────────────────────
+
+STATUSES_VALIDOS = [
+    'Não iniciado',
+    'Iniciado',
+    'Em andamento',
+    'Pausado',
+    'Em locação',
+    'Aguardo retorno',
+    'Finalizado'
+]
 
 @app.route('/api/tarefas', methods=['GET'])
 @login_required
@@ -391,8 +445,8 @@ def atualizar_status(codigo):
         return jsonify({'erro': 'Acesso negado'}), 403
 
     novo_status = request.json.get('status')
-    if novo_status not in ['Não iniciado', 'Em andamento', 'Finalizado']:
-        return jsonify({'erro': 'Status inválido'}), 400
+    if novo_status not in STATUSES_VALIDOS:
+        return jsonify({'erro': f'Status inválido. Valores aceitos: {", ".join(STATUSES_VALIDOS)}'}), 400
 
     anterior      = tarefa.status
     tarefa.status = novo_status
@@ -400,6 +454,13 @@ def atualizar_status(codigo):
         f'Status alterado de "{anterior}" para "{novo_status}" por {usuario.nome}.')
     db.session.commit()
     return jsonify(tarefa.to_dict()), 200
+
+
+@app.route('/api/tarefas/statuses', methods=['GET'])
+@login_required
+def listar_statuses():
+    """Retorna a lista de status válidos para o frontend usar dinamicamente."""
+    return jsonify(STATUSES_VALIDOS)
 
 
 @app.route('/api/tarefas/<int:codigo>/responsaveis', methods=['PUT'])
@@ -466,35 +527,7 @@ def adicionar_comentario(codigo):
 # INICIALIZAÇÃO
 # ─────────────────────────────────────────
 
-def seed_data():
-    if Usuario.query.count() == 0:
-        admin  = Usuario(nome='Administrador', funcao='Gestor',       email='admin@taskflow.com', tipo_perfil='Administrador', trocar_senha=False)
-        colab1 = Usuario(nome='João Silva',    funcao='Desenvolvedor', email='joao@taskflow.com',  tipo_perfil='Colaborativo',  trocar_senha=True)
-        colab2 = Usuario(nome='Maria Souza',   funcao='Designer',      email='maria@taskflow.com', tipo_perfil='Colaborativo',  trocar_senha=True)
-
-        admin.definir_senha('admin123')
-        colab1.definir_senha('joao123')
-        colab2.definir_senha('maria123')
-
-        db.session.add_all([admin, colab1, colab2])
-        db.session.commit()
-
-        t1 = Tarefa(descricao='Finalizar relatório de vendas do setor A', status='Em andamento')
-        t2 = Tarefa(descricao='Criar protótipo da nova tela de login',    status='Não iniciado')
-        t3 = Tarefa(descricao='Revisar documentação do sistema',          status='Finalizado')
-        db.session.add_all([t1, t2, t3])
-        db.session.flush()
-
-        t1.responsaveis.extend([colab1, colab2])
-        t2.responsaveis.append(colab2)
-        t3.responsaveis.append(colab1)
-
-        registrar_historico(t1.codigo, admin.id, f'Tarefa criada por {admin.nome}. Responsáveis: {colab1.nome}, {colab2.nome}.')
-        registrar_historico(t2.codigo, admin.id, f'Tarefa criada por {admin.nome}. Responsáveis: {colab2.nome}.')
-        registrar_historico(t3.codigo, admin.id, f'Tarefa criada por {admin.nome}. Responsáveis: {colab1.nome}.')
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        seed_data()
     app.run(debug=True, port=5000)
