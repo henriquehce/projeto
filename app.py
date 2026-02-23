@@ -461,6 +461,21 @@ def adicionar_comentario(codigo):
     db.session.commit()
     return jsonify(novo.to_dict()), 201
 
+@app.route('/setup')
+def setup():
+    if Usuario.query.filter_by(email='admin@taskflow.com').first():
+        return 'Usuário já existe'
+    u = Usuario(
+        nome='Administrador',
+        funcao='Admin',
+        email='admin@taskflow.com',
+        tipo_perfil='Administrador',
+        trocar_senha=False
+    )
+    u.definir_senha('admin123')
+    db.session.add(u)
+    db.session.commit()
+    return 'Usuário admin criado com sucesso!'
 
 # ─────────────────────────────────────────
 # INICIALIZAÇÃO
@@ -492,13 +507,6 @@ def seed_data():
         registrar_historico(t1.codigo, admin.id, f'Tarefa criada por {admin.nome}. Responsáveis: {colab1.nome}, {colab2.nome}.')
         registrar_historico(t2.codigo, admin.id, f'Tarefa criada por {admin.nome}. Responsáveis: {colab2.nome}.')
         registrar_historico(t3.codigo, admin.id, f'Tarefa criada por {admin.nome}. Responsáveis: {colab1.nome}.')
-
-        db.session.commit()
-        print("✅ Dados iniciais criados!")
-        print("📧 admin@taskflow.com   | senha: admin123")
-        print("📧 joao@taskflow.com    | senha: joao123  (troca no 1º acesso)")
-        print("📧 maria@taskflow.com   | senha: maria123 (troca no 1º acesso)")
-
 
 if __name__ == '__main__':
     with app.app_context():
