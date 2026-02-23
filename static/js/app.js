@@ -1,0 +1,640 @@
+/* ═══════════════════════════════════════
+   TASKFLOW — JavaScript Principal v3
+   Login com senha + troca obrigatória
+═══════════════════════════════════════ */
+
+let usuarioLogado  = null;
+let todasTarefas   = [];
+let filtroAtual    = 'todos';
+let tarefaAberta   = null;
+let deferredPrompt = null;
+let responsaveisDisponiveis = [];
+let tarefaEditandoResp      = null;
+
+// ─────────────────────────────────────────
+// INICIALIZAÇÃO
+// ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await api('/api/me');
+        if (res.ok) {
+            usuarioLogado = await res.json();
+            verificarTrocaSenha();
+        }
+    } catch {}
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('pwa-install-btn').style.display = 'block';
+    });
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+    }
+});
+
+// ─────────────────────────────────────────
+// API HELPER
+// ─────────────────────────────────────────
+async function api(url, method = 'GET', body = null) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(url, opts);
+}
+
+// ─────────────────────────────────────────
+// LOGIN
+// ─────────────────────────────────────────
+async function realizarLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    if (!email || !senha) { mostrarErroLogin('Preencha e-mail e senha.'); return; }
+
+    const btn = document.querySelector('#screen-login .btn-primary');
+    btn.textContent = 'Entrando...';
+    btn.disabled = true;
+
+    try {
+        const res = await api('/api/login', 'POST', { email, senha });
+        if (res.ok) {
+            usuarioLogado = await res.json();
+            verificarTrocaSenha();
+        } else {
+            const err = await res.json();
+            mostrarErroLogin(err.erro || 'Credenciais inválidas.');
+        }
+    } catch {
+        mostrarErroLogin('Erro de conexão.');
+    } finally {
+        btn.innerHTML = 'Entrar <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+        btn.disabled = false;
+    }
+}
+
+function mostrarErroLogin(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function preencherEmail(email, senha) {
+    document.getElementById('login-email').value = email;
+    document.getElementById('login-senha').value = senha;
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        if (document.getElementById('screen-login').classList.contains('active')) realizarLogin();
+        if (document.getElementById('modal-comentarios').classList.contains('active') && (e.ctrlKey || e.metaKey)) enviarComentario();
+    }
+});
+
+// ─────────────────────────────────────────
+// VERIFICAR SE PRECISA TROCAR SENHA
+// ─────────────────────────────────────────
+function verificarTrocaSenha() {
+    if (usuarioLogado.trocar_senha) {
+        // Mostra modal de troca obrigatória antes de entrar no app
+        document.getElementById('screen-login').classList.remove('active');
+        abrirModal('modal-trocar-senha');
+        document.getElementById('trocar-senha-aviso').style.display = 'block';
+    } else {
+        entrarNoApp();
+    }
+}
+
+async function fazerLogout() {
+    await api('/api/logout', 'POST');
+    usuarioLogado = null;
+    todasTarefas  = [];
+    document.getElementById('screen-app').classList.remove('active');
+    document.getElementById('screen-login').classList.add('active');
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-senha').value = '';
+    document.getElementById('login-error').style.display = 'none';
+    fecharUserMenu();
+}
+
+// ─────────────────────────────────────────
+// TROCAR SENHA (própria)
+// ─────────────────────────────────────────
+async function salvarTrocaSenha() {
+    const atual = document.getElementById('ts-atual').value;
+    const nova  = document.getElementById('ts-nova').value;
+    const conf  = document.getElementById('ts-conf').value;
+    const errEl = document.getElementById('ts-error');
+    errEl.style.display = 'none';
+
+    if (!atual || !nova || !conf) {
+        errEl.textContent = 'Preencha todos os campos.';
+        errEl.style.display = 'block'; return;
+    }
+    if (nova.length < 6) {
+        errEl.textContent = 'A nova senha deve ter pelo menos 6 caracteres.';
+        errEl.style.display = 'block'; return;
+    }
+    if (nova !== conf) {
+        errEl.textContent = 'As senhas não conferem.';
+        errEl.style.display = 'block'; return;
+    }
+
+    const res = await api('/api/trocar-senha', 'POST', {
+        senha_atual: atual, senha_nova: nova, senha_confirmacao: conf
+    });
+
+    if (res.ok) {
+        usuarioLogado.trocar_senha = false;
+        fecharModal('modal-trocar-senha');
+        limparCamposTrocaSenha();
+        toast('✅ Senha alterada com sucesso!', 'success');
+        // Se ainda não estava no app, entra agora
+        if (!document.getElementById('screen-app').classList.contains('active')) {
+            entrarNoApp();
+        }
+    } else {
+        const err = await res.json();
+        errEl.textContent = err.erro || 'Erro ao trocar senha.';
+        errEl.style.display = 'block';
+    }
+}
+
+function limparCamposTrocaSenha() {
+    ['ts-atual','ts-nova','ts-conf'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('ts-error').style.display = 'none';
+    document.getElementById('trocar-senha-aviso').style.display = 'none';
+}
+
+// ─────────────────────────────────────────
+// REDEFINIR SENHA (Admin redefine a de outro)
+// ─────────────────────────────────────────
+let usuarioRedefinindo = null;
+
+function abrirModalRedefinirSenha(uid, nome) {
+    usuarioRedefinindo = uid;
+    document.getElementById('rd-titulo').textContent = `Redefinir senha — ${nome}`;
+    document.getElementById('rd-nova').value = '';
+    document.getElementById('rd-conf').value = '';
+    document.getElementById('rd-error').style.display = 'none';
+    abrirModal('modal-redefinir-senha');
+}
+
+async function salvarRedefinicaoSenha() {
+    const nova = document.getElementById('rd-nova').value;
+    const conf = document.getElementById('rd-conf').value;
+    const errEl = document.getElementById('rd-error');
+    errEl.style.display = 'none';
+
+    if (!nova || !conf) {
+        errEl.textContent = 'Preencha os dois campos.';
+        errEl.style.display = 'block'; return;
+    }
+    if (nova.length < 6) {
+        errEl.textContent = 'Mínimo 6 caracteres.';
+        errEl.style.display = 'block'; return;
+    }
+    if (nova !== conf) {
+        errEl.textContent = 'As senhas não conferem.';
+        errEl.style.display = 'block'; return;
+    }
+
+    const res = await api(`/api/usuarios/${usuarioRedefinindo}/redefinir-senha`, 'POST', { senha_nova: nova });
+    if (res.ok) {
+        fecharModal('modal-redefinir-senha');
+        toast('✅ Senha redefinida! O usuário deverá trocá-la no próximo acesso.', 'success');
+    } else {
+        const err = await res.json();
+        errEl.textContent = err.erro || 'Erro ao redefinir.';
+        errEl.style.display = 'block';
+    }
+}
+
+// ─────────────────────────────────────────
+// ENTRAR NO APP
+// ─────────────────────────────────────────
+function entrarNoApp() {
+    const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
+    document.getElementById('screen-login').classList.remove('active');
+    document.getElementById('screen-app').classList.add('active');
+
+    const badge = document.getElementById('header-badge');
+    badge.textContent = isAdmin ? 'Admin' : 'Colaborativo';
+    badge.className   = 'perfil-badge ' + (isAdmin ? 'admin' : 'colab');
+
+    document.getElementById('avatar-initials').textContent = iniciais(usuarioLogado.nome);
+    document.getElementById('menu-nome').textContent       = usuarioLogado.nome;
+    document.getElementById('menu-funcao').textContent     = usuarioLogado.funcao;
+
+    document.getElementById('btn-nova-tarefa').style.display   = isAdmin ? 'flex'  : 'none';
+    document.getElementById('nav-usuarios-item').style.display = isAdmin ? 'block' : 'none';
+
+    navTo('tarefas');
+    carregarTarefas();
+}
+
+// ─────────────────────────────────────────
+// NAVEGAÇÃO
+// ─────────────────────────────────────────
+function navTo(pageName) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + pageName).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const navEl = document.querySelector(`.nav-item[data-page="${pageName}"]`);
+    if (navEl) navEl.classList.add('active');
+    toggleSidebar(false);
+    if (pageName === 'usuarios') carregarUsuarios();
+}
+
+// ─────────────────────────────────────────
+// SIDEBAR & USER MENU
+// ─────────────────────────────────────────
+function toggleSidebar(forceClose = null) {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const isOpen  = sidebar.classList.contains('open');
+    const close   = forceClose === true || (forceClose === null && isOpen);
+    sidebar.classList.toggle('open', !close);
+    overlay.classList.toggle('active', !close);
+}
+
+function toggleUserMenu() {
+    const menu = document.getElementById('user-menu');
+    menu.style.display = menu.style.display !== 'none' ? 'none' : 'block';
+}
+
+function fecharUserMenu() {
+    document.getElementById('user-menu').style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#avatar-btn') && !e.target.closest('#user-menu')) fecharUserMenu();
+});
+
+// ─────────────────────────────────────────
+// TAREFAS
+// ─────────────────────────────────────────
+async function carregarTarefas() {
+    try {
+        const res = await api('/api/tarefas');
+        if (res.ok) {
+            todasTarefas = await res.json();
+            const total   = todasTarefas.length;
+            const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
+            document.getElementById('tarefas-sub').textContent = isAdmin
+                ? `${total} tarefa${total !== 1 ? 's' : ''} no total`
+                : `${total} tarefa${total !== 1 ? 's' : ''} atribuída${total !== 1 ? 's' : ''} a você`;
+            renderizarTarefas();
+        }
+    } catch { toast('Erro ao carregar tarefas', 'error'); }
+}
+
+function renderizarTarefas() {
+    const grid  = document.getElementById('tasks-grid');
+    const empty = document.getElementById('tasks-empty');
+    const filtradas = filtroAtual === 'todos' ? todasTarefas : todasTarefas.filter(t => t.status === filtroAtual);
+
+    if (!filtradas.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+
+    const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
+
+    grid.innerHTML = filtradas.map(t => {
+        const cls = statusClass(t.status);
+        return `
+        <div class="task-card status-${cls}" ondblclick="abrirModalComentarios(${t.codigo})">
+            <div class="task-meta">
+                <span class="task-code">#${String(t.codigo).padStart(4,'0')}</span>
+                <span class="task-date">${t.data_criacao}</span>
+            </div>
+            <p class="task-desc">${escapar(t.descricao)}</p>
+            <div class="task-responsaveis">
+                ${renderResponsaveisAvatares(t.responsaveis)}
+                ${isAdmin ? `<button class="btn-edit-resp" onclick="event.stopPropagation();abrirModalResponsaveis(${t.codigo})" title="Editar responsáveis">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg></button>` : ''}
+            </div>
+            <div class="task-footer">
+                <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
+                    ${['Não iniciado','Em andamento','Finalizado'].map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
+                </select>
+                ${isAdmin ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                    </svg></button>` : ''}
+            </div>
+            <div class="dblclick-hint">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Clique 2x para comentar
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderResponsaveisAvatares(responsaveis) {
+    if (!responsaveis || !responsaveis.length) return `<span class="sem-responsavel">Sem responsável</span>`;
+    const vis    = responsaveis.slice(0, 3);
+    const extras = responsaveis.length - 3;
+    return `<div class="resp-group" title="${escapar(responsaveis.map(r=>r.nome).join(', '))}">
+        ${vis.map(r => `<div class="resp-avatar">${iniciais(r.nome)}</div>`).join('')}
+        ${extras > 0 ? `<div class="resp-avatar resp-extra">+${extras}</div>` : ''}
+    </div>`;
+}
+
+function filtrarStatus(status, btn) {
+    filtroAtual = status;
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    renderizarTarefas();
+}
+
+// ─────────────────────────────────────────
+// SELETOR MÚLTIPLO DE RESPONSÁVEIS
+// ─────────────────────────────────────────
+function renderSeletorResponsaveis(containerId, selecionados = []) {
+    const container = document.getElementById(containerId);
+    if (!responsaveisDisponiveis.length) {
+        container.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:20px">Nenhum colaborativo cadastrado.</p>';
+        return;
+    }
+    container.innerHTML = responsaveisDisponiveis.map(r => {
+        const marcado = selecionados.includes(r.id);
+        return `
+        <label class="resp-checkbox ${marcado ? 'checked' : ''}" data-id="${r.id}">
+            <input type="checkbox" value="${r.id}" ${marcado ? 'checked' : ''} onchange="toggleResponsavelCheck(this)">
+            <div class="resp-check-avatar">${iniciais(r.nome)}</div>
+            <div class="resp-check-info">
+                <span class="resp-check-nome">${escapar(r.nome)}</span>
+                <span class="resp-check-funcao">${escapar(r.funcao)}</span>
+            </div>
+            <div class="resp-check-mark">✓</div>
+        </label>`;
+    }).join('');
+}
+
+function toggleResponsavelCheck(checkbox) {
+    checkbox.closest('label').classList.toggle('checked', checkbox.checked);
+}
+
+function getResponsaveisSelecionados(containerId) {
+    return [...document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)].map(el => parseInt(el.value));
+}
+
+// ─────────────────────────────────────────
+// CRIAR TAREFA
+// ─────────────────────────────────────────
+async function abrirModalNovaTarefa() {
+    const res = await api('/api/usuarios/colaborativos');
+    if (res.ok) responsaveisDisponiveis = await res.json();
+    document.getElementById('nova-tarefa-desc').value = '';
+    renderSeletorResponsaveis('responsaveis-criar', []);
+    abrirModal('modal-nova-tarefa');
+}
+
+async function criarTarefa() {
+    const descricao        = document.getElementById('nova-tarefa-desc').value.trim();
+    const responsaveis_ids = getResponsaveisSelecionados('responsaveis-criar');
+    if (!descricao) { toast('Informe uma descrição', 'error'); return; }
+    const res = await api('/api/tarefas', 'POST', { descricao, responsaveis_ids });
+    if (res.ok) { fecharModal('modal-nova-tarefa'); toast('✅ Tarefa criada!', 'success'); carregarTarefas(); }
+    else { const e = await res.json(); toast(e.erro || 'Erro ao criar', 'error'); }
+}
+
+// ─────────────────────────────────────────
+// EDITAR RESPONSÁVEIS
+// ─────────────────────────────────────────
+async function abrirModalResponsaveis(codigo) {
+    tarefaEditandoResp = codigo;
+    const tarefa = todasTarefas.find(t => t.codigo === codigo);
+    const res = await api('/api/usuarios/colaborativos');
+    if (res.ok) responsaveisDisponiveis = await res.json();
+    document.getElementById('modal-resp-titulo').textContent = `Responsáveis — Tarefa #${String(codigo).padStart(4,'0')}`;
+    renderSeletorResponsaveis('responsaveis-editar', tarefa ? tarefa.responsaveis.map(r => r.id) : []);
+    abrirModal('modal-responsaveis');
+}
+
+async function salvarResponsaveis() {
+    const ids = getResponsaveisSelecionados('responsaveis-editar');
+    const res = await api(`/api/tarefas/${tarefaEditandoResp}/responsaveis`, 'PUT', { responsaveis_ids: ids });
+    if (res.ok) { fecharModal('modal-responsaveis'); toast('✅ Responsáveis atualizados!', 'success'); carregarTarefas(); }
+    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+}
+
+// ─────────────────────────────────────────
+// STATUS
+// ─────────────────────────────────────────
+async function alterarStatus(codigo, novoStatus) {
+    const res = await api(`/api/tarefas/${codigo}/status`, 'PATCH', { status: novoStatus });
+    if (res.ok) {
+        const idx = todasTarefas.findIndex(t => t.codigo === codigo);
+        if (idx !== -1) todasTarefas[idx].status = novoStatus;
+        renderizarTarefas();
+        toast('Status atualizado', 'success');
+    } else { toast('Erro ao atualizar status', 'error'); carregarTarefas(); }
+}
+
+// ─────────────────────────────────────────
+// EXCLUIR TAREFA
+// ─────────────────────────────────────────
+function confirmarExcluirTarefa(codigo) {
+    if (confirm(`Excluir tarefa #${String(codigo).padStart(4,'0')}? Esta ação não pode ser desfeita.`))
+        excluirTarefa(codigo);
+}
+
+async function excluirTarefa(codigo) {
+    const res = await api(`/api/tarefas/${codigo}`, 'DELETE');
+    if (res.ok) { toast(`Tarefa excluída`, 'success'); carregarTarefas(); }
+    else toast('Erro ao excluir', 'error');
+}
+
+// ─────────────────────────────────────────
+// COMENTÁRIOS + HISTÓRICO
+// ─────────────────────────────────────────
+async function abrirModalComentarios(codigo) {
+    tarefaAberta = codigo;
+    const tarefa = todasTarefas.find(t => t.codigo === codigo);
+    document.getElementById('comentario-titulo').textContent = `Tarefa #${String(codigo).padStart(4,'0')}`;
+    document.getElementById('comentario-desc').textContent   = tarefa ? tarefa.descricao : '';
+    document.getElementById('novo-comentario-texto').value   = '';
+    await carregarComentarios(codigo);
+    abrirModal('modal-comentarios');
+}
+
+async function carregarComentarios(codigo) {
+    const res  = await api(`/api/tarefas/${codigo}/comentarios`);
+    const area = document.getElementById('comments-area');
+    if (!res.ok) return;
+    const itens = await res.json();
+    if (!itens.length) { area.innerHTML = '<p class="comments-empty">Nenhum comentário ainda.</p>'; return; }
+    area.innerHTML = itens.map(c => {
+        if (c.tipo === 'historico') return `
+            <div class="historico-item">
+                <div class="historico-icon">⚡</div>
+                <div class="historico-body">
+                    <p class="historico-texto">${escapar(c.texto)}</p>
+                    <span class="comment-date">${c.data_hora}</span>
+                </div>
+            </div>`;
+        const cls = c.autor_perfil === 'Administrador' ? 'admin' : 'colab';
+        return `
+            <div class="comment-item">
+                <p class="comment-text">${escapar(c.texto)}</p>
+                <div class="comment-meta">
+                    <span class="comment-author ${cls}">${escapar(c.autor_nome)}</span>
+                    <span>·</span>
+                    <span class="comment-date">${c.data_hora}</span>
+                </div>
+            </div>`;
+    }).join('');
+    area.scrollTop = area.scrollHeight;
+}
+
+async function enviarComentario() {
+    const texto = document.getElementById('novo-comentario-texto').value.trim();
+    if (!texto) { toast('Escreva um comentário', 'error'); return; }
+    const res = await api(`/api/tarefas/${tarefaAberta}/comentarios`, 'POST', { texto });
+    if (res.ok) {
+        document.getElementById('novo-comentario-texto').value = '';
+        await carregarComentarios(tarefaAberta);
+        toast('Comentário enviado!', 'success');
+    } else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+}
+
+// ─────────────────────────────────────────
+// USUÁRIOS
+// ─────────────────────────────────────────
+async function carregarUsuarios() {
+    const res = await api('/api/usuarios');
+    if (!res.ok) return;
+    const usuarios = await res.json();
+    document.getElementById('usuarios-list').innerHTML = usuarios.map(u => {
+        const isAdmin = u.tipo_perfil === 'Administrador';
+        return `
+        <div class="usuario-card">
+            <div class="usuario-info">
+                <div class="usuario-avatar">${iniciais(u.nome)}</div>
+                <div>
+                    <p class="usuario-nome">${escapar(u.nome)}</p>
+                    <p class="usuario-email">${escapar(u.email)}</p>
+                    <p class="usuario-funcao">${escapar(u.funcao)}</p>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+                <span class="perfil-badge ${isAdmin ? 'admin' : 'colab'}">${u.tipo_perfil}</span>
+                ${u.trocar_senha ? '<span class="badge-senha">🔑 Troca pendente</span>' : ''}
+                <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    Senha
+                </button>
+                ${u.id !== usuarioLogado.id
+                    ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                        </svg></button>`
+                    : '<span style="font-size:12px;color:var(--text-dim)">Você</span>'}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function abrirModalNovoUsuario() {
+    ['nu-nome','nu-funcao','nu-email','nu-senha'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('nu-perfil').value = 'Colaborativo';
+    abrirModal('modal-novo-usuario');
+}
+
+async function criarUsuario() {
+    const nome        = document.getElementById('nu-nome').value.trim();
+    const funcao      = document.getElementById('nu-funcao').value.trim();
+    const email       = document.getElementById('nu-email').value.trim();
+    const tipo_perfil = document.getElementById('nu-perfil').value;
+    const senha       = document.getElementById('nu-senha').value;
+
+    if (!nome || !funcao || !email || !senha) { toast('Preencha todos os campos', 'error'); return; }
+    if (senha.length < 6) { toast('Senha deve ter pelo menos 6 caracteres', 'error'); return; }
+
+    const res = await api('/api/usuarios', 'POST', { nome, funcao, email, tipo_perfil, senha });
+    if (res.ok) { fecharModal('modal-novo-usuario'); toast('✅ Usuário cadastrado!', 'success'); carregarUsuarios(); }
+    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+}
+
+function confirmarExcluirUsuario(id, nome) {
+    if (confirm(`Excluir "${nome}"?`)) excluirUsuario(id);
+}
+
+async function excluirUsuario(id) {
+    const res = await api(`/api/usuarios/${id}`, 'DELETE');
+    if (res.ok) { toast('Usuário excluído', 'success'); carregarUsuarios(); }
+    else toast('Erro ao excluir', 'error');
+}
+
+// ─────────────────────────────────────────
+// MODAIS
+// ─────────────────────────────────────────
+function abrirModal(id) {
+    document.getElementById(id).classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function fecharModal(id) {
+    // Impede fechar modal de troca obrigatória sem salvar
+    if (id === 'modal-trocar-senha' && usuarioLogado && usuarioLogado.trocar_senha) return;
+    document.getElementById(id).classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function fecharModalSeFora(event, id) {
+    if (event.target.id === id) fecharModal(id);
+}
+
+// ─────────────────────────────────────────
+// PWA
+// ─────────────────────────────────────────
+async function instalarPWA() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') { toast('✅ App instalado!', 'success'); document.getElementById('pwa-install-btn').style.display = 'none'; }
+    deferredPrompt = null;
+}
+
+// ─────────────────────────────────────────
+// UTILITÁRIOS
+// ─────────────────────────────────────────
+function toggleSenhaVisivel(inputId, btn) {
+    const input = document.getElementById(inputId);
+    const mostrar = input.type === 'password';
+    input.type = mostrar ? 'text' : 'password';
+    btn.style.color = mostrar ? 'var(--accent)' : 'var(--text-dim)';
+}
+
+function iniciais(nome) {
+    if (!nome) return '?';
+    return nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+}
+
+function escapar(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function statusClass(s) {
+    if (s === 'Em andamento') return 'andamento';
+    if (s === 'Finalizado')   return 'finalizado';
+    return 'nao';
+}
+
+function toast(msg, tipo = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `toast ${tipo}`;
+    el.style.display = 'flex';
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
