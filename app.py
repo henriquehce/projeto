@@ -461,21 +461,6 @@ def adicionar_comentario(codigo):
     db.session.commit()
     return jsonify(novo.to_dict()), 201
 
-@app.route('/setup')
-def setup():
-    if Usuario.query.filter_by(email='admin@taskflow.com').first():
-        return 'Usuário já existe'
-    u = Usuario(
-        nome='Administrador',
-        funcao='Admin',
-        email='admin@taskflow.com',
-        tipo_perfil='Administrador',
-        trocar_senha=False
-    )
-    u.definir_senha('admin123')
-    db.session.add(u)
-    db.session.commit()
-    return 'Usuário admin criado com sucesso!'
 
 # ─────────────────────────────────────────
 # INICIALIZAÇÃO
