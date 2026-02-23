@@ -1,6 +1,9 @@
 # ── Ambiente e segredos ──────────────────────
 .env
 *.env
+.env.local
+.env.*.local
+
 
 # ── Banco de dados local ─────────────────────
 instance/
