@@ -11,6 +11,16 @@ let deferredPrompt = null;
 let responsaveisDisponiveis = [];
 let tarefaEditandoResp      = null;
 
+const STATUSES = [
+    'Não iniciado',
+    'Iniciado',
+    'Em andamento',
+    'Pausado',
+    'Em locação',
+    'Aguardo retorno',
+    'Finalizado'
+];
+
 // ─────────────────────────────────────────
 // INICIALIZAÇÃO
 // ─────────────────────────────────────────
@@ -81,11 +91,6 @@ function mostrarErroLogin(msg) {
     el.style.display = 'block';
 }
 
-function preencherEmail(email, senha) {
-    document.getElementById('login-email').value = email;
-    document.getElementById('login-senha').value = senha;
-}
-
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         if (document.getElementById('screen-login').classList.contains('active')) realizarLogin();
@@ -98,7 +103,6 @@ document.addEventListener('keydown', (e) => {
 // ─────────────────────────────────────────
 function verificarTrocaSenha() {
     if (usuarioLogado.trocar_senha) {
-        // Mostra modal de troca obrigatória antes de entrar no app
         document.getElementById('screen-login').classList.remove('active');
         abrirModal('modal-trocar-senha');
         document.getElementById('trocar-senha-aviso').style.display = 'block';
@@ -120,6 +124,19 @@ async function fazerLogout() {
 }
 
 // ─────────────────────────────────────────
+// VALIDAÇÃO DE SENHA FORTE — Frontend
+// ─────────────────────────────────────────
+function validarSenhaForte(senha) {
+    if (senha.length < 8)               return 'A senha deve ter pelo menos 8 caracteres.';
+    if (!/[A-Z]/.test(senha))           return 'A senha deve conter pelo menos 1 letra maiúscula.';
+    if (!/[a-z]/.test(senha))           return 'A senha deve conter pelo menos 1 letra minúscula.';
+    if (!/\d/.test(senha))              return 'A senha deve conter pelo menos 1 número.';
+    if (!/[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha))
+                                        return 'A senha deve conter pelo menos 1 caractere especial.';
+    return null; // válida
+}
+
+// ─────────────────────────────────────────
 // TROCAR SENHA (própria)
 // ─────────────────────────────────────────
 async function salvarTrocaSenha() {
@@ -133,10 +150,13 @@ async function salvarTrocaSenha() {
         errEl.textContent = 'Preencha todos os campos.';
         errEl.style.display = 'block'; return;
     }
-    if (nova.length < 6) {
-        errEl.textContent = 'A nova senha deve ter pelo menos 6 caracteres.';
+
+    const erroSenha = validarSenhaForte(nova);
+    if (erroSenha) {
+        errEl.textContent = erroSenha;
         errEl.style.display = 'block'; return;
     }
+
     if (nova !== conf) {
         errEl.textContent = 'As senhas não conferem.';
         errEl.style.display = 'block'; return;
@@ -151,7 +171,6 @@ async function salvarTrocaSenha() {
         fecharModal('modal-trocar-senha');
         limparCamposTrocaSenha();
         toast('✅ Senha alterada com sucesso!', 'success');
-        // Se ainda não estava no app, entra agora
         if (!document.getElementById('screen-app').classList.contains('active')) {
             entrarNoApp();
         }
@@ -183,8 +202,8 @@ function abrirModalRedefinirSenha(uid, nome) {
 }
 
 async function salvarRedefinicaoSenha() {
-    const nova = document.getElementById('rd-nova').value;
-    const conf = document.getElementById('rd-conf').value;
+    const nova  = document.getElementById('rd-nova').value;
+    const conf  = document.getElementById('rd-conf').value;
     const errEl = document.getElementById('rd-error');
     errEl.style.display = 'none';
 
@@ -192,10 +211,13 @@ async function salvarRedefinicaoSenha() {
         errEl.textContent = 'Preencha os dois campos.';
         errEl.style.display = 'block'; return;
     }
-    if (nova.length < 6) {
-        errEl.textContent = 'Mínimo 6 caracteres.';
+
+    const erroSenha = validarSenhaForte(nova);
+    if (erroSenha) {
+        errEl.textContent = erroSenha;
         errEl.style.display = 'block'; return;
     }
+
     if (nova !== conf) {
         errEl.textContent = 'As senhas não conferem.';
         errEl.style.display = 'block'; return;
@@ -320,7 +342,7 @@ function renderizarTarefas() {
             </div>
             <div class="task-footer">
                 <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
-                    ${['Não iniciado','Em andamento','Finalizado'].map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
+                    ${STATUSES.map(s => `<option ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                 </select>
                 ${isAdmin ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
                     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -447,7 +469,7 @@ function confirmarExcluirTarefa(codigo) {
 
 async function excluirTarefa(codigo) {
     const res = await api(`/api/tarefas/${codigo}`, 'DELETE');
-    if (res.ok) { toast(`Tarefa excluída`, 'success'); carregarTarefas(); }
+    if (res.ok) { toast('Tarefa excluída', 'success'); carregarTarefas(); }
     else toast('Erro ao excluir', 'error');
 }
 
@@ -546,6 +568,8 @@ async function carregarUsuarios() {
 function abrirModalNovoUsuario() {
     ['nu-nome','nu-funcao','nu-email','nu-senha'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('nu-perfil').value = 'Colaborativo';
+    const strength = document.getElementById('nu-strength');
+    if (strength) strength.style.display = 'none';
     abrirModal('modal-novo-usuario');
 }
 
@@ -557,7 +581,9 @@ async function criarUsuario() {
     const senha       = document.getElementById('nu-senha').value;
 
     if (!nome || !funcao || !email || !senha) { toast('Preencha todos os campos', 'error'); return; }
-    if (senha.length < 6) { toast('Senha deve ter pelo menos 6 caracteres', 'error'); return; }
+
+    const erroSenha = validarSenhaForte(senha);
+    if (erroSenha) { toast(erroSenha, 'error'); return; }
 
     const res = await api('/api/usuarios', 'POST', { nome, funcao, email, tipo_perfil, senha });
     if (res.ok) { fecharModal('modal-novo-usuario'); toast('✅ Usuário cadastrado!', 'success'); carregarUsuarios(); }
@@ -583,7 +609,6 @@ function abrirModal(id) {
 }
 
 function fecharModal(id) {
-    // Impede fechar modal de troca obrigatória sem salvar
     if (id === 'modal-trocar-senha' && usuarioLogado && usuarioLogado.trocar_senha) return;
     document.getElementById(id).classList.remove('active');
     document.body.style.overflow = '';
@@ -625,9 +650,16 @@ function escapar(str) {
 }
 
 function statusClass(s) {
-    if (s === 'Em andamento') return 'andamento';
-    if (s === 'Finalizado')   return 'finalizado';
-    return 'nao';
+    const mapa = {
+        'Não iniciado':   'nao',
+        'Iniciado':       'iniciado',
+        'Em andamento':   'andamento',
+        'Pausado':        'pausado',
+        'Em locação':     'locacao',
+        'Aguardo retorno':'aguardo',
+        'Finalizado':     'finalizado'
+    };
+    return mapa[s] || 'nao';
 }
 
 function toast(msg, tipo = 'success') {
