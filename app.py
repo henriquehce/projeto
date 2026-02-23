@@ -46,6 +46,12 @@ tarefa_responsaveis = db.Table('tarefa_responsaveis',
 )
 
 # ─────────────────────────────────────────
+# MIGRACAO
+# ─────────────────────────────────────────
+from flask_migrate import Migrate
+migrate = Migrate(app, db)
+
+# ─────────────────────────────────────────
 # MODELOS
 # ─────────────────────────────────────────
 
