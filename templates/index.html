@@ -14,6 +14,77 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* ── Força de Senha ── */
+        .senha-strength {
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+        .strength-bar-wrap {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 6px;
+        }
+        .strength-bar-wrap .bar {
+            flex: 1;
+            height: 4px;
+            border-radius: 99px;
+            background: var(--border, #2a2a3a);
+            transition: background 0.3s;
+        }
+        .strength-bar-wrap .bar.active-1 { background: #ef4444; }
+        .strength-bar-wrap .bar.active-2 { background: #f97316; }
+        .strength-bar-wrap .bar.active-3 { background: #eab308; }
+        .strength-bar-wrap .bar.active-4 { background: #22c55e; }
+        .strength-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: .04em;
+            margin-bottom: 8px;
+        }
+        .strength-label.s1 { color: #ef4444; }
+        .strength-label.s2 { color: #f97316; }
+        .strength-label.s3 { color: #eab308; }
+        .strength-label.s4 { color: #22c55e; }
+
+        /* ── Checklist de Requisitos ── */
+        .senha-checklist {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 8px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .senha-checklist li {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-muted, #888);
+            transition: color 0.2s;
+        }
+        .senha-checklist li.ok {
+            color: #22c55e;
+        }
+        .senha-checklist li .chk-icon {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1.5px solid currentColor;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 9px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .senha-checklist li.ok .chk-icon {
+            background: #22c55e;
+            border-color: #22c55e;
+            color: #fff;
+        }
+    </style>
 </head>
 <body>
 
@@ -139,7 +210,11 @@
             <div class="filters-bar">
                 <button class="filter-chip active" onclick="filtrarStatus('todos', this)">Todas</button>
                 <button class="filter-chip" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
+                <button class="filter-chip" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
                 <button class="filter-chip" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
+                <button class="filter-chip" onclick="filtrarStatus('Pausado', this)">Pausado</button>
+                <button class="filter-chip" onclick="filtrarStatus('Em locação', this)">Em locação</button>
+                <button class="filter-chip" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
                 <button class="filter-chip" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
             </div>
 
@@ -244,12 +319,30 @@
             </select>
             <label class="field-label">Senha inicial</label>
             <div class="input-password-wrap">
-                <input type="password" id="nu-senha" class="field-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                <input type="password" id="nu-senha" class="field-input" placeholder="Mínimo 8 caracteres"
+                       autocomplete="new-password" oninput="atualizarForcaSenha('nu-senha','nu-strength')">
                 <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('nu-senha', this)" tabindex="-1">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
             </div>
-            <p style="font-size:12px;color:var(--text-muted);margin-top:-6px">O colaborativo será solicitado a trocar no primeiro acesso.</p>
+            <!-- Força + checklist -->
+            <div class="senha-strength" id="nu-strength" style="display:none">
+                <div class="strength-bar-wrap">
+                    <div class="bar" id="nu-bar1"></div>
+                    <div class="bar" id="nu-bar2"></div>
+                    <div class="bar" id="nu-bar3"></div>
+                    <div class="bar" id="nu-bar4"></div>
+                </div>
+                <div class="strength-label" id="nu-strength-label"></div>
+                <ul class="senha-checklist" id="nu-checklist">
+                    <li id="nu-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
+                    <li id="nu-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
+                    <li id="nu-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
+                    <li id="nu-r4"><span class="chk-icon">✓</span> Número</li>
+                    <li id="nu-r5"><span class="chk-icon">✓</span> Caractere especial (!@#$%...)</li>
+                </ul>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:4px">O colaborativo será solicitado a trocar no primeiro acesso.</p>
         </div>
         <div class="modal-footer">
             <button onclick="fecharModal('modal-novo-usuario')" class="btn-ghost">Cancelar</button>
@@ -303,10 +396,28 @@
             </div>
             <label class="field-label">Nova senha</label>
             <div class="input-password-wrap">
-                <input type="password" id="ts-nova" class="field-input" placeholder="Mínimo 6 caracteres">
+                <input type="password" id="ts-nova" class="field-input" placeholder="Mínimo 8 caracteres"
+                       oninput="atualizarForcaSenha('ts-nova','ts-strength')">
                 <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-nova',this)" tabindex="-1">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
+            </div>
+            <!-- Força + checklist -->
+            <div class="senha-strength" id="ts-strength" style="display:none">
+                <div class="strength-bar-wrap">
+                    <div class="bar" id="ts-bar1"></div>
+                    <div class="bar" id="ts-bar2"></div>
+                    <div class="bar" id="ts-bar3"></div>
+                    <div class="bar" id="ts-bar4"></div>
+                </div>
+                <div class="strength-label" id="ts-strength-label"></div>
+                <ul class="senha-checklist" id="ts-checklist">
+                    <li id="ts-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
+                    <li id="ts-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
+                    <li id="ts-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
+                    <li id="ts-r4"><span class="chk-icon">✓</span> Número</li>
+                    <li id="ts-r5"><span class="chk-icon">✓</span> Caractere especial (!@#$%...)</li>
+                </ul>
             </div>
             <label class="field-label">Confirmar nova senha</label>
             <div class="input-password-wrap">
@@ -339,10 +450,28 @@
         <div class="modal-body">
             <label class="field-label">Nova senha</label>
             <div class="input-password-wrap">
-                <input type="password" id="rd-nova" class="field-input" placeholder="Mínimo 6 caracteres">
+                <input type="password" id="rd-nova" class="field-input" placeholder="Mínimo 8 caracteres"
+                       oninput="atualizarForcaSenha('rd-nova','rd-strength')">
                 <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-nova',this)" tabindex="-1">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
+            </div>
+            <!-- Força + checklist -->
+            <div class="senha-strength" id="rd-strength" style="display:none">
+                <div class="strength-bar-wrap">
+                    <div class="bar" id="rd-bar1"></div>
+                    <div class="bar" id="rd-bar2"></div>
+                    <div class="bar" id="rd-bar3"></div>
+                    <div class="bar" id="rd-bar4"></div>
+                </div>
+                <div class="strength-label" id="rd-strength-label"></div>
+                <ul class="senha-checklist" id="rd-checklist">
+                    <li id="rd-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
+                    <li id="rd-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
+                    <li id="rd-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
+                    <li id="rd-r4"><span class="chk-icon">✓</span> Número</li>
+                    <li id="rd-r5"><span class="chk-icon">✓</span> Caractere especial (!@#$%...)</li>
+                </ul>
             </div>
             <label class="field-label">Confirmar senha</label>
             <div class="input-password-wrap">
@@ -364,5 +493,83 @@
 <div id="toast" class="toast" style="display:none"></div>
 
 <script src="/static/js/app.js"></script>
+<script>
+// ═══════════════════════════════════════
+// VALIDAÇÃO DE FORÇA DE SENHA — Frontend
+// ═══════════════════════════════════════
+
+function calcularForca(senha) {
+    const regras = {
+        tamanho:   senha.length >= 8,
+        maiuscula: /[A-Z]/.test(senha),
+        minuscula: /[a-z]/.test(senha),
+        numero:    /\d/.test(senha),
+        especial:  /[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha)
+    };
+    const score = Object.values(regras).filter(Boolean).length;
+    return { regras, score };
+}
+
+function atualizarForcaSenha(inputId, containerId) {
+    const prefixo = containerId.replace('-strength', '');
+    const senha   = document.getElementById(inputId).value;
+    const wrap    = document.getElementById(containerId);
+
+    if (!senha) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = 'block';
+
+    const { regras, score } = calcularForca(senha);
+
+    // Atualiza barras
+    const niveis = ['active-1','active-2','active-3','active-4'];
+    for (let i = 1; i <= 4; i++) {
+        const bar = document.getElementById(`${prefixo}-bar${i}`);
+        bar.className = 'bar';
+        if (score >= i) {
+            // Mapeia score → classe de cor (score 1-2 = vermelho/laranja, 3 = amarelo, 4-5 = verde)
+            const cor = score <= 1 ? 'active-1'
+                      : score === 2 ? 'active-2'
+                      : score === 3 ? 'active-3'
+                      : 'active-4';
+            bar.classList.add(cor);
+        }
+    }
+
+    // Label
+    const label = document.getElementById(`${prefixo}-strength-label`);
+    const textos = ['', 'Muito fraca', 'Fraca', 'Razoável', 'Boa', 'Forte'];
+    const classes = ['', 's1', 's1', 's3', 's4', 's4'];
+    label.textContent = textos[score];
+    label.className   = `strength-label ${classes[score]}`;
+
+    // Checklist
+    const mapa = { r1: 'tamanho', r2: 'maiuscula', r3: 'minuscula', r4: 'numero', r5: 'especial' };
+    for (const [id, chave] of Object.entries(mapa)) {
+        const li = document.getElementById(`${prefixo}-${id}`);
+        if (li) li.classList.toggle('ok', regras[chave]);
+    }
+}
+
+// Limpa o widget de força ao fechar os modais de senha
+(function() {
+    const origFechar = window.fecharModal;
+    if (typeof origFechar === 'function') {
+        window.fecharModal = function(id) {
+            ['nu-senha','ts-nova','rd-nova'].forEach(campo => {
+                const el = document.getElementById(campo);
+                if (el) el.value = '';
+            });
+            ['nu-strength','ts-strength','rd-strength'].forEach(w => {
+                const el = document.getElementById(w);
+                if (el) el.style.display = 'none';
+            });
+            origFechar(id);
+        };
+    }
+})();
+</script>
 </body>
 </html>
