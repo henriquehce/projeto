@@ -1,11 +1,13 @@
 from flask import Flask, jsonify, request, render_template, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask_mail import Mail, Message
 from datetime import datetime
 from functools import wraps
 import bcrypt
 import re
 import os
+import threading
 
 try:
     from dotenv import load_dotenv
@@ -32,7 +34,21 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-db = SQLAlchemy(app)
+# ─────────────────────────────────────────
+# FLASK-MAIL — Gmail SMTP
+# ─────────────────────────────────────────
+app.config['MAIL_SERVER']   = 'smtp.gmail.com'
+app.config['MAIL_PORT']     = 587
+app.config['MAIL_USE_TLS']  = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')   # ex: taskflow@gmail.com
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')   # App Password do Google
+app.config['MAIL_DEFAULT_SENDER'] = (
+    'TaskFlow',
+    os.environ.get('MAIL_USERNAME', 'noreply@taskflow.com')
+)
+
+db   = SQLAlchemy(app)
+mail = Mail(app)
 CORS(app)
 
 # ─────────────────────────────────────────
@@ -105,7 +121,7 @@ class Tarefa(db.Model):
     descricao      = db.Column(db.Text, nullable=False)
     data_criacao   = db.Column(db.DateTime, default=datetime.utcnow)
     status         = db.Column(db.String(30), default='Não iniciado')
-    prioridade     = db.Column(db.String(10), default='Media')   # Baixa | Media | Alta
+    prioridade     = db.Column(db.String(10), default='Media')
     compartilhada  = db.Column(db.Boolean, default=True)
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
@@ -145,6 +161,152 @@ class Comentario(db.Model):
             'autor_nome':   self.autor.nome if self.autor else 'Sistema',
             'autor_perfil': self.autor.tipo_perfil if self.autor else 'sistema'
         }
+
+
+# ─────────────────────────────────────────
+# EMAIL HELPERS
+# ─────────────────────────────────────────
+
+def _enviar_async(app_ctx, msg):
+    """Envia email em thread separada para não travar a resposta."""
+    with app_ctx:
+        try:
+            mail.send(msg)
+        except Exception as e:
+            print(f'[EMAIL] Erro ao enviar: {e}')
+
+
+def enviar_email(destinatarios, assunto, corpo_html):
+    """Dispara email sem bloquear a requisição. Ignora silenciosamente se MAIL_USERNAME não configurado."""
+    if not app.config.get('MAIL_USERNAME'):
+        return
+    if not destinatarios:
+        return
+    try:
+        msg = Message(subject=assunto, recipients=destinatarios, html=corpo_html)
+        t = threading.Thread(target=_enviar_async, args=(app.app_context(), msg))
+        t.daemon = True
+        t.start()
+    except Exception as e:
+        print(f'[EMAIL] Falha ao criar mensagem: {e}')
+
+
+def _template_base(titulo, conteudo):
+    """Template HTML base para todos os emails."""
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f4f4f4; padding: 20px;">
+        <div style="background: #0f172a; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 22px;">TaskFlow</h1>
+        </div>
+        <div style="background: #ffffff; padding: 32px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #0f172a; margin-top: 0;">{titulo}</h2>
+            {conteudo}
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+                Este é um email automático do TaskFlow. Não responda este email.
+            </p>
+        </div>
+    </div>
+    """
+
+
+def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
+    """Notifica responsáveis recém-adicionados a uma tarefa."""
+    if not responsaveis_novos:
+        return
+    emails = [u.email for u in responsaveis_novos]
+    prioridade_cor = {'Alta': '#ef4444', 'Media': '#f59e0b', 'Baixa': '#22c55e'}.get(tarefa.prioridade, '#64748b')
+    conteudo = f"""
+        <p>Olá! Você foi atribuído(a) à seguinte tarefa:</p>
+        <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Status:</strong> {tarefa.status}</p>
+            <p style="margin: 0 0 8px 0;">
+                <strong>Prioridade:</strong>
+                <span style="color: {prioridade_cor}; font-weight: bold;">{tarefa.prioridade}</span>
+            </p>
+            <p style="margin: 0;"><strong>Atribuída por:</strong> {admin_nome}</p>
+        </div>
+        <p>Acesse o TaskFlow para visualizar os detalhes.</p>
+    """
+    enviar_email(
+        emails,
+        f'[TaskFlow] Você foi atribuído a uma tarefa',
+        _template_base('Nova tarefa atribuída a você', conteudo)
+    )
+
+
+def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
+    """Notifica todos os envolvidos na tarefa, exceto quem comentou."""
+    envolvidos = set()
+    # Responsáveis da tarefa
+    for u in tarefa.responsaveis:
+        if u.id != autor_id:
+            envolvidos.add(u.email)
+    # Admin criador da tarefa
+    if tarefa.criado_por and tarefa.criado_por != autor_id:
+        criador = db.session.get(Usuario, tarefa.criado_por)
+        if criador:
+            envolvidos.add(criador.email)
+
+    if not envolvidos:
+        return
+
+    conteudo = f"""
+        <p>Um novo comentário foi adicionado à tarefa que você acompanha:</p>
+        <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
+        </div>
+        <div style="background: #f1f5f9; border-radius: 4px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0 0 4px 0; color: #64748b; font-size: 12px;"><strong>{autor_nome}</strong> comentou:</p>
+            <p style="margin: 0; color: #0f172a;">{comentario_texto}</p>
+        </div>
+        <p>Acesse o TaskFlow para responder ou ver o histórico completo.</p>
+    """
+    enviar_email(
+        list(envolvidos),
+        f'[TaskFlow] Novo comentário na tarefa',
+        _template_base('Novo comentário adicionado', conteudo)
+    )
+
+
+def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nome):
+    """Notifica os responsáveis da tarefa quando o status muda."""
+    emails = [u.email for u in tarefa.responsaveis]
+    if not emails:
+        return
+
+    STATUS_COR = {
+        'Não iniciado':  '#94a3b8',
+        'Iniciado':      '#3b82f6',
+        'Em andamento':  '#8b5cf6',
+        'Pausado':       '#f59e0b',
+        'Aguardo retorno': '#f97316',
+        'Finalizado':    '#22c55e',
+    }
+    cor_novo = STATUS_COR.get(status_novo, '#64748b')
+
+    conteudo = f"""
+        <p>O status de uma tarefa foi atualizado:</p>
+        <div style="background: #f8fafc; border-left: 4px solid {cor_novo}; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
+            <p style="margin: 0 0 8px 0;">
+                <strong>Status anterior:</strong>
+                <span style="color: #64748b;">{status_anterior}</span>
+            </p>
+            <p style="margin: 0 0 8px 0;">
+                <strong>Novo status:</strong>
+                <span style="color: {cor_novo}; font-weight: bold;">{status_novo}</span>
+            </p>
+            <p style="margin: 0;"><strong>Alterado por:</strong> {alterado_por_nome}</p>
+        </div>
+        <p>Acesse o TaskFlow para mais detalhes.</p>
+    """
+    enviar_email(
+        emails,
+        f'[TaskFlow] Status da tarefa atualizado para "{status_novo}"',
+        _template_base('Status da tarefa atualizado', conteudo)
+    )
 
 
 # ─────────────────────────────────────────
@@ -341,7 +503,6 @@ PRIORIDADES_VALIDAS = ['Baixa', 'Media', 'Alta']
 def listar_tarefas():
     usuario = db.session.get(Usuario, session['usuario_id'])
     if usuario.tipo_perfil == 'Administrador':
-        # Admin vê todas as compartilhadas + as próprias não compartilhadas
         tarefas = Tarefa.query.filter(
             db.or_(
                 Tarefa.compartilhada == True,
@@ -378,12 +539,14 @@ def criar_tarefa():
     db.session.add(nova)
     db.session.flush()
 
+    responsaveis_novos = []
     nomes = []
     if compartilhada:
         for uid in dados.get('responsaveis_ids', []):
             u = db.session.get(Usuario, uid)
             if u and u.tipo_perfil == 'Colaborativo':
                 nova.responsaveis.append(u)
+                responsaveis_novos.append(u)
                 nomes.append(u.nome)
 
     admin = db.session.get(Usuario, session['usuario_id'])
@@ -397,6 +560,11 @@ def criar_tarefa():
 
     registrar_historico(nova.codigo, session['usuario_id'], msg)
     db.session.commit()
+
+    # ── EMAIL: notifica responsáveis atribuídos
+    if responsaveis_novos:
+        email_tarefa_atribuida(nova, responsaveis_novos, admin.nome)
+
     return jsonify(nova.to_dict()), 201
 
 
@@ -406,7 +574,6 @@ def excluir_tarefa(codigo):
     tarefa = db.session.get(Tarefa, codigo)
     if not tarefa:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
-    # Só o criador pode excluir tarefa não compartilhada
     if not tarefa.compartilhada and tarefa.criado_por != session['usuario_id']:
         return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(tarefa)
@@ -426,13 +593,18 @@ def atualizar_status(codigo):
 
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
-        return jsonify({'erro': f'Status inválido'}), 400
+        return jsonify({'erro': 'Status inválido'}), 400
 
     anterior      = tarefa.status
     tarefa.status = novo_status
     registrar_historico(codigo, session['usuario_id'],
         f'Status alterado de "{anterior}" para "{novo_status}" por {usuario.nome}.')
     db.session.commit()
+
+    # ── EMAIL: notifica responsáveis sobre mudança de status
+    if anterior != novo_status:
+        email_status_alterado(tarefa, anterior, novo_status, usuario.nome)
+
     return jsonify(tarefa.to_dict()), 200
 
 
@@ -458,21 +630,31 @@ def atualizar_responsaveis(codigo):
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
 
     admin       = db.session.get(Usuario, session['usuario_id'])
-    nomes_antes = [u.nome for u in tarefa.responsaveis]
+    ids_antes   = {u.id for u in tarefa.responsaveis}
 
     tarefa.responsaveis.clear()
-    nomes_depois = []
+    nomes_depois        = []
+    responsaveis_novos  = []
     for uid in request.json.get('responsaveis_ids', []):
         u = db.session.get(Usuario, uid)
         if u and u.tipo_perfil == 'Colaborativo':
             tarefa.responsaveis.append(u)
             nomes_depois.append(u.nome)
+            # Só notifica quem é NOVO na tarefa
+            if u.id not in ids_antes:
+                responsaveis_novos.append(u)
 
+    nomes_antes_str  = ', '.join([db.session.get(Usuario, i).nome for i in ids_antes if db.session.get(Usuario, i)]) or 'nenhum'
     registrar_historico(codigo, session['usuario_id'],
         f'Responsáveis alterados por {admin.nome}. '
-        f'Antes: {", ".join(nomes_antes) or "nenhum"}. '
+        f'Antes: {nomes_antes_str}. '
         f'Agora: {", ".join(nomes_depois) or "nenhum"}.')
     db.session.commit()
+
+    # ── EMAIL: notifica apenas quem foi adicionado agora
+    if responsaveis_novos:
+        email_tarefa_atribuida(tarefa, responsaveis_novos, admin.nome)
+
     return jsonify(tarefa.to_dict()), 200
 
 
@@ -506,6 +688,10 @@ def adicionar_comentario(codigo):
     novo = Comentario(id_tarefa=codigo, id_usuario=session['usuario_id'], texto=texto, tipo='comentario')
     db.session.add(novo)
     db.session.commit()
+
+    # ── EMAIL: notifica envolvidos sobre o novo comentário
+    email_comentario_adicionado(tarefa, texto, usuario.nome, usuario.id)
+
     return jsonify(novo.to_dict()), 201
 
 
