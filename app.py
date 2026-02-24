@@ -695,18 +695,6 @@ def adicionar_comentario(codigo):
     return jsonify(novo.to_dict()), 201
 
 
-@app.route('/api/test-email')
-def test_email():
-    try:
-        msg = Message(
-            subject='[TaskFlow] Teste de email',
-            recipients=[os.environ.get('MAIL_USERNAME')],
-            html='<p>Email de teste funcionando!</p>'
-        )
-        mail.send(msg)
-        return jsonify({'ok': True, 'mensagem': 'Email enviado!'}), 200
-    except Exception as e:
-        return jsonify({'ok': False, 'erro': str(e)}), 500
 
 # ─────────────────────────────────────────
 # INICIALIZAÇÃO
