@@ -155,22 +155,22 @@ class Comentario(db.Model):
 # ─────────────────────────────────────────
 
 def _enviar_async(destinatarios, assunto, corpo_html):
-    """Envia email via Resend API em thread separada."""
-    api_key = os.environ.get('RESEND_API_KEY')
+    """Envia email via Brevo API em thread separada."""
+    api_key = os.environ.get('BREVO_API_KEY')
     if not api_key:
         return
     payload = _json.dumps({
-        'from':    'TaskFlow <onboarding@resend.dev>',
-        'to':      destinatarios,
-        'subject': assunto,
-        'html':    corpo_html
+        'sender':      { 'name': 'TaskFlow', 'email': 'noreply@taskflow.com' },
+        'to':          [{'email': e} for e in destinatarios],
+        'subject':     assunto,
+        'htmlContent': corpo_html
     }).encode('utf-8')
     req = urllib.request.Request(
-        'https://api.resend.com/emails',
+        'https://api.brevo.com/v3/smtp/email',
         data=payload,
         headers={
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type':  'application/json'
+            'api-key':      api_key,
+            'Content-Type': 'application/json'
         },
         method='POST'
     )
@@ -183,7 +183,7 @@ def _enviar_async(destinatarios, assunto, corpo_html):
 
 def enviar_email(destinatarios, assunto, corpo_html):
     """Dispara email sem bloquear a requisição."""
-    if not os.environ.get('RESEND_API_KEY'):
+    if not os.environ.get('BREVO_API_KEY'):
         return
     if not destinatarios:
         return
