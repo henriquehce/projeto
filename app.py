@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, request, render_template, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from flask_mail import Mail, Message
+import urllib.request
+import json as _json
 from datetime import datetime
 from functools import wraps
 import bcrypt
@@ -34,21 +35,7 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# ─────────────────────────────────────────
-# FLASK-MAIL — Gmail SMTP
-# ─────────────────────────────────────────
-app.config['MAIL_SERVER']   = 'smtp.gmail.com'
-app.config['MAIL_PORT']     = 587
-app.config['MAIL_USE_TLS']  = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')   # ex: taskflow@gmail.com
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')   # App Password do Google
-app.config['MAIL_DEFAULT_SENDER'] = (
-    'TaskFlow',
-    os.environ.get('MAIL_USERNAME', 'noreply@taskflow.com')
-)
-
 db   = SQLAlchemy(app)
-mail = Mail(app)
 CORS(app)
 
 # ─────────────────────────────────────────
@@ -164,31 +151,45 @@ class Comentario(db.Model):
 
 
 # ─────────────────────────────────────────
-# EMAIL HELPERS
+# EMAIL HELPERS — Resend API (HTTP, sem SMTP)
 # ─────────────────────────────────────────
 
-def _enviar_async(app_ctx, msg):
-    """Envia email em thread separada para não travar a resposta."""
-    with app_ctx:
-        try:
-            mail.send(msg)
-        except Exception as e:
-            print(f'[EMAIL] Erro ao enviar: {e}')
+def _enviar_async(destinatarios, assunto, corpo_html):
+    """Envia email via Resend API em thread separada."""
+    api_key = os.environ.get('RESEND_API_KEY')
+    if not api_key:
+        return
+    payload = _json.dumps({
+        'from':    'TaskFlow <onboarding@resend.dev>',
+        'to':      destinatarios,
+        'subject': assunto,
+        'html':    corpo_html
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        'https://api.resend.com/emails',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type':  'application/json'
+        },
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f'[EMAIL] Enviado: {resp.status}')
+    except Exception as e:
+        print(f'[EMAIL] Erro ao enviar: {e}')
 
 
 def enviar_email(destinatarios, assunto, corpo_html):
-    """Dispara email sem bloquear a requisição. Ignora silenciosamente se MAIL_USERNAME não configurado."""
-    if not app.config.get('MAIL_USERNAME'):
+    """Dispara email sem bloquear a requisição."""
+    if not os.environ.get('RESEND_API_KEY'):
         return
     if not destinatarios:
         return
-    try:
-        msg = Message(subject=assunto, recipients=destinatarios, html=corpo_html)
-        t = threading.Thread(target=_enviar_async, args=(app.app_context(), msg))
-        t.daemon = True
-        t.start()
-    except Exception as e:
-        print(f'[EMAIL] Falha ao criar mensagem: {e}')
+    t = threading.Thread(target=_enviar_async, args=(destinatarios, assunto, corpo_html))
+    t.daemon = True
+    t.start()
 
 
 def _template_base(titulo, conteudo):
@@ -693,7 +694,6 @@ def adicionar_comentario(codigo):
     email_comentario_adicionado(tarefa, texto, usuario.nome, usuario.id)
 
     return jsonify(novo.to_dict()), 201
-
 
 
 # ─────────────────────────────────────────
