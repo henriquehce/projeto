@@ -108,7 +108,7 @@ class Tarefa(db.Model):
     descricao      = db.Column(db.Text, nullable=False)
     data_criacao   = db.Column(db.DateTime, default=datetime.utcnow)
     status         = db.Column(db.String(30), default='Não iniciado')
-    prioridade     = db.Column(db.String(10), default='Media')
+    prioridade     = db.Column(db.String(10), default='Nenhuma')
     compartilhada  = db.Column(db.Boolean, default=True)
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
@@ -496,7 +496,7 @@ STATUSES_VALIDOS = [
     'Pausado', 'Aguardo retorno', 'Finalizado'
 ]
 
-PRIORIDADES_VALIDAS = ['Baixa', 'Media', 'Alta']
+PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
 
 
 @app.route('/api/tarefas', methods=['GET'])
@@ -525,7 +525,7 @@ def criar_tarefa():
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descrição obrigatória'}), 400
 
-    prioridade    = dados.get('prioridade', 'Media')
+    prioridade    = dados.get('prioridade', 'Nenhuma')
     compartilhada = dados.get('compartilhada', True)
 
     if prioridade not in PRIORIDADES_VALIDAS:

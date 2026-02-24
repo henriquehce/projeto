@@ -10,13 +10,14 @@ let tarefaAberta   = null;
 let deferredPrompt = null;
 let responsaveisDisponiveis = [];
 let tarefaEditandoResp      = null;
+let ordemAtual = { coluna: null, direcao: 'asc' };
 
 const STATUSES = [
     'Não iniciado', 'Iniciado', 'Em andamento',
     'Pausado', 'Aguardo retorno', 'Finalizado'
 ];
 
-const PRIORIDADES = ['Baixa', 'Media', 'Alta'];
+const PRIORIDADES = ['Nenhuma', 'Alta'];
 
 // ─────────────────────────────────────────
 // INICIALIZAÇÃO
@@ -295,7 +296,48 @@ function getTarefasFiltradas() {
             (t.responsaveis || []).some(r => r.nome.toLowerCase().includes(q))
         );
     }
+    if (ordemAtual.coluna) {
+        lista = [...lista].sort((a, b) => {
+            let va, vb;
+            switch (ordemAtual.coluna) {
+                case 'responsavel':
+                    va = (a.responsaveis[0]?.nome || '').toLowerCase();
+                    vb = (b.responsaveis[0]?.nome || '').toLowerCase();
+                    break;
+                case 'descricao':
+                    va = a.descricao.toLowerCase();
+                    vb = b.descricao.toLowerCase();
+                    break;
+                case 'data':
+                    va = a.codigo; vb = b.codigo;
+                    break;
+                case 'prioridade': {
+                    const ord = { 'Alta': 2, 'Nenhuma': 1 };
+                    va = ord[a.prioridade] || 0; vb = ord[b.prioridade] || 0;
+                    break;
+                }
+                case 'status':
+                    va = STATUSES.indexOf(a.status);
+                    vb = STATUSES.indexOf(b.status);
+                    break;
+                default: return 0;
+            }
+            if (va < vb) return ordemAtual.direcao === 'asc' ? -1 : 1;
+            if (va > vb) return ordemAtual.direcao === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
     return lista;
+}
+
+function ordenarPor(coluna) {
+    if (ordemAtual.coluna === coluna) {
+        ordemAtual.direcao = ordemAtual.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        ordemAtual.coluna = coluna;
+        ordemAtual.direcao = 'asc';
+    }
+    renderizarTarefas();
 }
 
 function filtrarStatus(status, btn) {
@@ -329,15 +371,23 @@ function renderizarTarefas() {
         grid.innerHTML = filtradas.map(t => renderCard(t, isAdmin)).join('');
     } else {
         grid.className = 'tasks-table-wrap';
+        const th = (label, col) => {
+            const ativo  = ordemAtual.coluna === col;
+            const seta   = ativo ? (ordemAtual.direcao === 'asc' ? ' ↑' : ' ↓') : ' ↕';
+            const estilo = ativo ? 'color:var(--accent)' : 'color:var(--text-dim)';
+            return `<th class="th-sort" onclick="ordenarPor('${col}')" style="cursor:pointer;user-select:none">
+                ${label}<span style="font-size:11px;${estilo}">${seta}</span>
+            </th>`;
+        };
         grid.innerHTML = `
         <table class="tasks-table">
             <thead>
                 <tr>
-                    <th>Responsável</th>
-                    <th>Tarefa</th>
-                    <th>Criação</th>
-                    <th>Prioridade</th>
-                    <th>Status</th>
+                    ${th('Responsável','responsavel')}
+                    ${th('Tarefa','descricao')}
+                    ${th('Criação','data')}
+                    ${th('Prioridade','prioridade')}
+                    ${th('Status','status')}
                     ${isAdmin ? '<th style="width:80px">Ações</th>' : ''}
                 </tr>
             </thead>
@@ -416,9 +466,8 @@ function renderLinha(t, isAdmin) {
 }
 
 function badgePrioridade(p) {
-    const cls = { 'Baixa': 'prio-baixa', 'Media': 'prio-media', 'Alta': 'prio-alta' };
-    const label = { 'Baixa': '↓ Baixa', 'Media': '→ Média', 'Alta': '↑ Alta' };
-    return `<span class="badge-prio ${cls[p] || 'prio-media'}">${label[p] || p}</span>`;
+    if (p !== 'Alta') return '';
+    return `<span class="badge-prio prio-alta">↑ Alta</span>`;
 }
 
 function renderResponsaveisAvatares(responsaveis) {
@@ -475,7 +524,7 @@ async function abrirModalNovaTarefa() {
     const res = await api('/api/usuarios/colaborativos');
     if (res.ok) responsaveisDisponiveis = await res.json();
     document.getElementById('nova-tarefa-desc').value   = '';
-    document.getElementById('nova-tarefa-prio').value   = 'Media';
+    document.getElementById('nova-tarefa-prio').value   = 'Nenhuma';
     document.getElementById('nova-tarefa-shared').checked = true;
     toggleCompartilhada(true);
     renderSeletorResponsaveis('responsaveis-criar', []);
