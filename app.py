@@ -160,7 +160,7 @@ def _enviar_async(destinatarios, assunto, corpo_html):
     if not api_key:
         return
     payload = _json.dumps({
-        'sender':      { 'name': 'TaskFlow', 'email': 'noreply@taskflow.com' },
+        'sender':      { 'name': 'TaskFlow', 'email': 'henriquecipriani@gmail.com' },
         'to':          [{'email': e} for e in destinatarios],
         'subject':     assunto,
         'htmlContent': corpo_html
