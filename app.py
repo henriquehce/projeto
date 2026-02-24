@@ -7,7 +7,6 @@ import bcrypt
 import re
 import os
 
-# Carrega variaveis do .env automaticamente (so em desenvolvimento)
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -15,7 +14,7 @@ except ImportError:
     pass
 
 # ─────────────────────────────────────────
-# CONFIGURACAO — local vs producao
+# CONFIGURACAO
 # ─────────────────────────────────────────
 def get_database_url():
     url = os.environ.get('DATABASE_URL', 'sqlite:///taskflow.db')
@@ -37,16 +36,13 @@ db = SQLAlchemy(app)
 CORS(app)
 
 # ─────────────────────────────────────────
-# TABELA ASSOCIATIVA — Tarefa <-> Responsáveis
+# TABELA ASSOCIATIVA
 # ─────────────────────────────────────────
 tarefa_responsaveis = db.Table('tarefa_responsaveis',
     db.Column('tarefa_codigo', db.Integer, db.ForeignKey('tarefas.codigo'), primary_key=True),
     db.Column('usuario_id',    db.Integer, db.ForeignKey('usuarios.id'),    primary_key=True)
 )
 
-# ─────────────────────────────────────────
-# MIGRACAO
-# ─────────────────────────────────────────
 from flask_migrate import Migrate
 migrate = Migrate(app, db)
 
@@ -54,16 +50,6 @@ migrate = Migrate(app, db)
 # VALIDAÇÃO DE SENHA FORTE
 # ─────────────────────────────────────────
 def validar_senha_forte(senha):
-    """
-    Retorna (True, None) se a senha for válida.
-    Retorna (False, mensagem_de_erro) se não for.
-    Regras:
-      - Mínimo 8 caracteres
-      - Pelo menos 1 letra maiúscula
-      - Pelo menos 1 letra minúscula
-      - Pelo menos 1 número
-      - Pelo menos 1 caractere especial (!@#$%^&*...)
-    """
     if len(senha) < 8:
         return False, 'A senha deve ter pelo menos 8 caracteres'
     if not re.search(r'[A-Z]', senha):
@@ -94,14 +80,12 @@ class Usuario(db.Model):
 
     def definir_senha(self, senha_plain):
         self.senha_hash = bcrypt.hashpw(
-            senha_plain.encode('utf-8'),
-            bcrypt.gensalt()
+            senha_plain.encode('utf-8'), bcrypt.gensalt()
         ).decode('utf-8')
 
     def verificar_senha(self, senha_plain):
         return bcrypt.checkpw(
-            senha_plain.encode('utf-8'),
-            self.senha_hash.encode('utf-8')
+            senha_plain.encode('utf-8'), self.senha_hash.encode('utf-8')
         )
 
     def to_dict(self):
@@ -117,21 +101,29 @@ class Usuario(db.Model):
 
 class Tarefa(db.Model):
     __tablename__ = 'tarefas'
-    codigo       = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    descricao    = db.Column(db.Text, nullable=False)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
-    status       = db.Column(db.String(30), default='Não iniciado')
-    responsaveis = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
-                                   backref=db.backref('tarefas_responsavel', lazy=True))
-    comentarios  = db.relationship('Comentario', backref='tarefa', lazy=True, cascade='all, delete-orphan')
+    codigo         = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    descricao      = db.Column(db.Text, nullable=False)
+    data_criacao   = db.Column(db.DateTime, default=datetime.utcnow)
+    status         = db.Column(db.String(30), default='Não iniciado')
+    prioridade     = db.Column(db.String(10), default='Media')   # Baixa | Media | Alta
+    compartilhada  = db.Column(db.Boolean, default=True)
+    criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
+                                     backref=db.backref('tarefas_responsavel', lazy=True),
+                                     foreign_keys=[tarefa_responsaveis.c.tarefa_codigo,
+                                                   tarefa_responsaveis.c.usuario_id])
+    comentarios    = db.relationship('Comentario', backref='tarefa', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
-            'codigo':       self.codigo,
-            'descricao':    self.descricao,
-            'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M'),
-            'status':       self.status,
-            'responsaveis': [{'id': u.id, 'nome': u.nome, 'funcao': u.funcao} for u in self.responsaveis]
+            'codigo':        self.codigo,
+            'descricao':     self.descricao,
+            'data_criacao':  self.data_criacao.strftime('%d/%m/%Y %H:%M'),
+            'status':        self.status,
+            'prioridade':    self.prioridade,
+            'compartilhada': self.compartilhada,
+            'criado_por':    self.criado_por,
+            'responsaveis':  [{'id': u.id, 'nome': u.nome, 'funcao': u.funcao} for u in self.responsaveis]
         }
 
 
@@ -141,7 +133,7 @@ class Comentario(db.Model):
     id_tarefa  = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
     id_usuario = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     texto      = db.Column(db.Text, nullable=False)
-    tipo       = db.Column(db.String(20), default='comentario')  # 'comentario' | 'historico'
+    tipo       = db.Column(db.String(20), default='comentario')
     data_hora  = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -156,7 +148,7 @@ class Comentario(db.Model):
 
 
 # ─────────────────────────────────────────
-# HELPER — Histórico automático
+# HELPERS
 # ─────────────────────────────────────────
 def registrar_historico(id_tarefa, id_usuario, texto):
     db.session.add(Comentario(
@@ -202,21 +194,16 @@ def index():
 # ─────────────────────────────────────────
 # AUTENTICAÇÃO
 # ─────────────────────────────────────────
-
 @app.route('/api/login', methods=['POST'])
 def login():
     dados = request.json
     email = dados.get('email', '').strip().lower()
     senha = dados.get('senha', '')
-
     if not email or not senha:
         return jsonify({'erro': 'E-mail e senha são obrigatórios'}), 400
-
     usuario = Usuario.query.filter_by(email=email).first()
-
     if not usuario or not usuario.verificar_senha(senha):
         return jsonify({'erro': 'E-mail ou senha incorretos'}), 401
-
     session['usuario_id'] = usuario.id
     return jsonify(usuario.to_dict()), 200
 
@@ -235,32 +222,15 @@ def me():
 
 
 # ─────────────────────────────────────────
-# ROTA — Regras de senha (para o frontend exibir)
+# TROCAR / REDEFINIR SENHA
 # ─────────────────────────────────────────
-@app.route('/api/senha-regras', methods=['GET'])
-def senha_regras():
-    return jsonify({
-        'regras': [
-            'Mínimo de 8 caracteres',
-            'Pelo menos 1 letra maiúscula',
-            'Pelo menos 1 letra minúscula',
-            'Pelo menos 1 número',
-            'Pelo menos 1 caractere especial (!@#$%^&* etc.)'
-        ]
-    })
-
-
-# ─────────────────────────────────────────
-# TROCAR SENHA (colaborativo troca a própria)
-# ─────────────────────────────────────────
-
 @app.route('/api/trocar-senha', methods=['POST'])
 @login_required
 def trocar_senha():
-    dados        = request.json
-    senha_atual  = dados.get('senha_atual', '')
-    senha_nova   = dados.get('senha_nova', '')
-    senha_conf   = dados.get('senha_confirmacao', '')
+    dados       = request.json
+    senha_atual = dados.get('senha_atual', '')
+    senha_nova  = dados.get('senha_nova', '')
+    senha_conf  = dados.get('senha_confirmacao', '')
 
     if not senha_atual or not senha_nova or not senha_conf:
         return jsonify({'erro': 'Preencha todos os campos'}), 400
@@ -273,20 +243,14 @@ def trocar_senha():
         return jsonify({'erro': 'A confirmação de senha não confere'}), 400
 
     usuario = db.session.get(Usuario, session['usuario_id'])
-
     if not usuario.verificar_senha(senha_atual):
         return jsonify({'erro': 'Senha atual incorreta'}), 401
 
     usuario.definir_senha(senha_nova)
     usuario.trocar_senha = False
     db.session.commit()
-
     return jsonify({'mensagem': 'Senha alterada com sucesso!'}), 200
 
-
-# ─────────────────────────────────────────
-# REDEFINIR SENHA (Admin redefine a de outro)
-# ─────────────────────────────────────────
 
 @app.route('/api/usuarios/<int:uid>/redefinir-senha', methods=['POST'])
 @admin_required
@@ -294,24 +258,19 @@ def redefinir_senha(uid):
     usuario = db.session.get(Usuario, uid)
     if not usuario:
         return jsonify({'erro': 'Usuário não encontrado'}), 404
-
     nova_senha = request.json.get('senha_nova', '')
-
     valida, erro = validar_senha_forte(nova_senha)
     if not valida:
         return jsonify({'erro': erro}), 400
-
     usuario.definir_senha(nova_senha)
     usuario.trocar_senha = True
     db.session.commit()
-
-    return jsonify({'mensagem': f'Senha de {usuario.nome} redefinida. Ela deverá trocá-la no próximo acesso.'}), 200
+    return jsonify({'mensagem': f'Senha de {usuario.nome} redefinida.'}), 200
 
 
 # ─────────────────────────────────────────
 # USUÁRIOS
 # ─────────────────────────────────────────
-
 @app.route('/api/usuarios', methods=['GET'])
 @login_required
 def listar_usuarios():
@@ -343,10 +302,8 @@ def criar_usuario():
         return jsonify({'erro': 'E-mail já cadastrado'}), 409
 
     novo = Usuario(
-        nome=dados['nome'],
-        funcao=dados['funcao'],
-        email=dados['email'].lower(),
-        tipo_perfil=dados['tipo_perfil'],
+        nome=dados['nome'], funcao=dados['funcao'],
+        email=dados['email'].lower(), tipo_perfil=dados['tipo_perfil'],
         trocar_senha=True
     )
     novo.definir_senha(dados['senha'])
@@ -371,23 +328,26 @@ def excluir_usuario(uid):
 # ─────────────────────────────────────────
 # TAREFAS
 # ─────────────────────────────────────────
-
 STATUSES_VALIDOS = [
-    'Não iniciado',
-    'Iniciado',
-    'Em andamento',
-    'Pausado',
-    'Em locação',
-    'Aguardo retorno',
-    'Finalizado'
+    'Não iniciado', 'Iniciado', 'Em andamento',
+    'Pausado', 'Aguardo retorno', 'Finalizado'
 ]
+
+PRIORIDADES_VALIDAS = ['Baixa', 'Media', 'Alta']
+
 
 @app.route('/api/tarefas', methods=['GET'])
 @login_required
 def listar_tarefas():
     usuario = db.session.get(Usuario, session['usuario_id'])
     if usuario.tipo_perfil == 'Administrador':
-        tarefas = Tarefa.query.order_by(Tarefa.codigo.desc()).all()
+        # Admin vê todas as compartilhadas + as próprias não compartilhadas
+        tarefas = Tarefa.query.filter(
+            db.or_(
+                Tarefa.compartilhada == True,
+                Tarefa.criado_por == usuario.id
+            )
+        ).order_by(Tarefa.codigo.desc()).all()
     else:
         tarefas = (Tarefa.query
                    .join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)
@@ -403,22 +363,39 @@ def criar_tarefa():
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descrição obrigatória'}), 400
 
-    nova = Tarefa(descricao=dados['descricao'])
+    prioridade    = dados.get('prioridade', 'Media')
+    compartilhada = dados.get('compartilhada', True)
+
+    if prioridade not in PRIORIDADES_VALIDAS:
+        return jsonify({'erro': 'Prioridade inválida'}), 400
+
+    nova = Tarefa(
+        descricao=dados['descricao'],
+        prioridade=prioridade,
+        compartilhada=compartilhada,
+        criado_por=session['usuario_id']
+    )
     db.session.add(nova)
     db.session.flush()
 
     nomes = []
-    for uid in dados.get('responsaveis_ids', []):
-        u = db.session.get(Usuario, uid)
-        if u and u.tipo_perfil == 'Colaborativo':
-            nova.responsaveis.append(u)
-            nomes.append(u.nome)
+    if compartilhada:
+        for uid in dados.get('responsaveis_ids', []):
+            u = db.session.get(Usuario, uid)
+            if u and u.tipo_perfil == 'Colaborativo':
+                nova.responsaveis.append(u)
+                nomes.append(u.nome)
 
     admin = db.session.get(Usuario, session['usuario_id'])
     msg = f'Tarefa criada por {admin.nome}.'
-    msg += f' Responsáveis: {", ".join(nomes)}.' if nomes else ' Sem responsáveis.'
-    registrar_historico(nova.codigo, session['usuario_id'], msg)
+    if not compartilhada:
+        msg += ' Tarefa pessoal (não compartilhada).'
+    elif nomes:
+        msg += f' Responsáveis: {", ".join(nomes)}.'
+    else:
+        msg += ' Sem responsáveis.'
 
+    registrar_historico(nova.codigo, session['usuario_id'], msg)
     db.session.commit()
     return jsonify(nova.to_dict()), 201
 
@@ -429,6 +406,9 @@ def excluir_tarefa(codigo):
     tarefa = db.session.get(Tarefa, codigo)
     if not tarefa:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    # Só o criador pode excluir tarefa não compartilhada
+    if not tarefa.compartilhada and tarefa.criado_por != session['usuario_id']:
+        return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(tarefa)
     db.session.commit()
     return jsonify({'mensagem': f'Tarefa #{codigo} excluída'}), 200
@@ -446,7 +426,7 @@ def atualizar_status(codigo):
 
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
-        return jsonify({'erro': f'Status inválido. Valores aceitos: {", ".join(STATUSES_VALIDOS)}'}), 400
+        return jsonify({'erro': f'Status inválido'}), 400
 
     anterior      = tarefa.status
     tarefa.status = novo_status
@@ -456,11 +436,18 @@ def atualizar_status(codigo):
     return jsonify(tarefa.to_dict()), 200
 
 
-@app.route('/api/tarefas/statuses', methods=['GET'])
-@login_required
-def listar_statuses():
-    """Retorna a lista de status válidos para o frontend usar dinamicamente."""
-    return jsonify(STATUSES_VALIDOS)
+@app.route('/api/tarefas/<int:codigo>/prioridade', methods=['PATCH'])
+@admin_required
+def atualizar_prioridade(codigo):
+    tarefa = db.session.get(Tarefa, codigo)
+    if not tarefa:
+        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    nova = request.json.get('prioridade')
+    if nova not in PRIORIDADES_VALIDAS:
+        return jsonify({'erro': 'Prioridade inválida'}), 400
+    tarefa.prioridade = nova
+    db.session.commit()
+    return jsonify(tarefa.to_dict()), 200
 
 
 @app.route('/api/tarefas/<int:codigo>/responsaveis', methods=['PUT'])
@@ -470,8 +457,8 @@ def atualizar_responsaveis(codigo):
     if not tarefa:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
 
-    admin        = db.session.get(Usuario, session['usuario_id'])
-    nomes_antes  = [u.nome for u in tarefa.responsaveis]
+    admin       = db.session.get(Usuario, session['usuario_id'])
+    nomes_antes = [u.nome for u in tarefa.responsaveis]
 
     tarefa.responsaveis.clear()
     nomes_depois = []
@@ -492,7 +479,6 @@ def atualizar_responsaveis(codigo):
 # ─────────────────────────────────────────
 # COMENTÁRIOS
 # ─────────────────────────────────────────
-
 @app.route('/api/tarefas/<int:codigo>/comentarios', methods=['GET'])
 @login_required
 def listar_comentarios(codigo):
@@ -526,7 +512,6 @@ def adicionar_comentario(codigo):
 # ─────────────────────────────────────────
 # INICIALIZAÇÃO
 # ─────────────────────────────────────────
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

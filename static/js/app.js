@@ -1,25 +1,22 @@
 /* ═══════════════════════════════════════
-   TASKFLOW — JavaScript Principal v3
-   Login com senha + troca obrigatória
+   TASKFLOW — JavaScript Principal v4
 ═══════════════════════════════════════ */
 
 let usuarioLogado  = null;
 let todasTarefas   = [];
 let filtroAtual    = 'todos';
+let buscaAtual     = '';
 let tarefaAberta   = null;
 let deferredPrompt = null;
 let responsaveisDisponiveis = [];
 let tarefaEditandoResp      = null;
 
 const STATUSES = [
-    'Não iniciado',
-    'Iniciado',
-    'Em andamento',
-    'Pausado',
-    'Em locação',
-    'Aguardo retorno',
-    'Finalizado'
+    'Não iniciado', 'Iniciado', 'Em andamento',
+    'Pausado', 'Aguardo retorno', 'Finalizado'
 ];
+
+const PRIORIDADES = ['Baixa', 'Media', 'Alta'];
 
 // ─────────────────────────────────────────
 // INICIALIZAÇÃO
@@ -99,7 +96,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ─────────────────────────────────────────
-// VERIFICAR SE PRECISA TROCAR SENHA
+// VERIFICAR TROCA DE SENHA
 // ─────────────────────────────────────────
 function verificarTrocaSenha() {
     if (usuarioLogado.trocar_senha) {
@@ -124,7 +121,7 @@ async function fazerLogout() {
 }
 
 // ─────────────────────────────────────────
-// VALIDAÇÃO DE SENHA FORTE — Frontend
+// VALIDAÇÃO DE SENHA FORTE
 // ─────────────────────────────────────────
 function validarSenhaForte(senha) {
     if (senha.length < 8)               return 'A senha deve ter pelo menos 8 caracteres.';
@@ -133,11 +130,11 @@ function validarSenhaForte(senha) {
     if (!/\d/.test(senha))              return 'A senha deve conter pelo menos 1 número.';
     if (!/[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha))
                                         return 'A senha deve conter pelo menos 1 caractere especial.';
-    return null; // válida
+    return null;
 }
 
 // ─────────────────────────────────────────
-// TROCAR SENHA (própria)
+// TROCAR SENHA
 // ─────────────────────────────────────────
 async function salvarTrocaSenha() {
     const atual = document.getElementById('ts-atual').value;
@@ -146,34 +143,18 @@ async function salvarTrocaSenha() {
     const errEl = document.getElementById('ts-error');
     errEl.style.display = 'none';
 
-    if (!atual || !nova || !conf) {
-        errEl.textContent = 'Preencha todos os campos.';
-        errEl.style.display = 'block'; return;
-    }
-
+    if (!atual || !nova || !conf) { errEl.textContent = 'Preencha todos os campos.'; errEl.style.display = 'block'; return; }
     const erroSenha = validarSenhaForte(nova);
-    if (erroSenha) {
-        errEl.textContent = erroSenha;
-        errEl.style.display = 'block'; return;
-    }
+    if (erroSenha) { errEl.textContent = erroSenha; errEl.style.display = 'block'; return; }
+    if (nova !== conf) { errEl.textContent = 'As senhas não conferem.'; errEl.style.display = 'block'; return; }
 
-    if (nova !== conf) {
-        errEl.textContent = 'As senhas não conferem.';
-        errEl.style.display = 'block'; return;
-    }
-
-    const res = await api('/api/trocar-senha', 'POST', {
-        senha_atual: atual, senha_nova: nova, senha_confirmacao: conf
-    });
-
+    const res = await api('/api/trocar-senha', 'POST', { senha_atual: atual, senha_nova: nova, senha_confirmacao: conf });
     if (res.ok) {
         usuarioLogado.trocar_senha = false;
         fecharModal('modal-trocar-senha');
         limparCamposTrocaSenha();
         toast('✅ Senha alterada com sucesso!', 'success');
-        if (!document.getElementById('screen-app').classList.contains('active')) {
-            entrarNoApp();
-        }
+        if (!document.getElementById('screen-app').classList.contains('active')) entrarNoApp();
     } else {
         const err = await res.json();
         errEl.textContent = err.erro || 'Erro ao trocar senha.';
@@ -188,7 +169,7 @@ function limparCamposTrocaSenha() {
 }
 
 // ─────────────────────────────────────────
-// REDEFINIR SENHA (Admin redefine a de outro)
+// REDEFINIR SENHA (Admin)
 // ─────────────────────────────────────────
 let usuarioRedefinindo = null;
 
@@ -207,26 +188,15 @@ async function salvarRedefinicaoSenha() {
     const errEl = document.getElementById('rd-error');
     errEl.style.display = 'none';
 
-    if (!nova || !conf) {
-        errEl.textContent = 'Preencha os dois campos.';
-        errEl.style.display = 'block'; return;
-    }
-
+    if (!nova || !conf) { errEl.textContent = 'Preencha os dois campos.'; errEl.style.display = 'block'; return; }
     const erroSenha = validarSenhaForte(nova);
-    if (erroSenha) {
-        errEl.textContent = erroSenha;
-        errEl.style.display = 'block'; return;
-    }
-
-    if (nova !== conf) {
-        errEl.textContent = 'As senhas não conferem.';
-        errEl.style.display = 'block'; return;
-    }
+    if (erroSenha) { errEl.textContent = erroSenha; errEl.style.display = 'block'; return; }
+    if (nova !== conf) { errEl.textContent = 'As senhas não conferem.'; errEl.style.display = 'block'; return; }
 
     const res = await api(`/api/usuarios/${usuarioRedefinindo}/redefinir-senha`, 'POST', { senha_nova: nova });
     if (res.ok) {
         fecharModal('modal-redefinir-senha');
-        toast('✅ Senha redefinida! O usuário deverá trocá-la no próximo acesso.', 'success');
+        toast('✅ Senha redefinida!', 'success');
     } else {
         const err = await res.json();
         errEl.textContent = err.erro || 'Erro ao redefinir.';
@@ -296,14 +266,14 @@ document.addEventListener('click', (e) => {
 });
 
 // ─────────────────────────────────────────
-// TAREFAS
+// TAREFAS — CARREGAR
 // ─────────────────────────────────────────
 async function carregarTarefas() {
     try {
         const res = await api('/api/tarefas');
         if (res.ok) {
             todasTarefas = await res.json();
-            const total   = todasTarefas.length;
+            const total  = todasTarefas.length;
             const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
             document.getElementById('tarefas-sub').textContent = isAdmin
                 ? `${total} tarefa${total !== 1 ? 's' : ''} no total`
@@ -313,48 +283,142 @@ async function carregarTarefas() {
     } catch { toast('Erro ao carregar tarefas', 'error'); }
 }
 
+// ─────────────────────────────────────────
+// TAREFAS — FILTRAR
+// ─────────────────────────────────────────
+function getTarefasFiltradas() {
+    let lista = filtroAtual === 'todos' ? todasTarefas : todasTarefas.filter(t => t.status === filtroAtual);
+    if (buscaAtual.trim()) {
+        const q = buscaAtual.trim().toLowerCase();
+        lista = lista.filter(t =>
+            t.descricao.toLowerCase().includes(q) ||
+            (t.responsaveis || []).some(r => r.nome.toLowerCase().includes(q))
+        );
+    }
+    return lista;
+}
+
+function filtrarStatus(status, btn) {
+    filtroAtual = status;
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    renderizarTarefas();
+}
+
+function buscarTarefas(valor) {
+    buscaAtual = valor;
+    renderizarTarefas();
+}
+
+// ─────────────────────────────────────────
+// TAREFAS — RENDERIZAR (tabela no desktop, cards no mobile)
+// ─────────────────────────────────────────
 function renderizarTarefas() {
     const grid  = document.getElementById('tasks-grid');
     const empty = document.getElementById('tasks-empty');
-    const filtradas = filtroAtual === 'todos' ? todasTarefas : todasTarefas.filter(t => t.status === filtroAtual);
+    const filtradas = getTarefasFiltradas();
 
     if (!filtradas.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
 
-    const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
+    const isAdmin  = usuarioLogado.tipo_perfil === 'Administrador';
+    const isMobile = window.innerWidth <= 768;
 
-    grid.innerHTML = filtradas.map(t => {
-        const cls = statusClass(t.status);
-        return `
-        <div class="task-card status-${cls}" ondblclick="abrirModalComentarios(${t.codigo})">
-            <div class="task-meta">
-                <span class="task-code">#${String(t.codigo).padStart(4,'0')}</span>
-                <span class="task-date">${t.data_criacao}</span>
-            </div>
-            <p class="task-desc">${escapar(t.descricao)}</p>
-            <div class="task-responsaveis">
-                ${renderResponsaveisAvatares(t.responsaveis)}
-                ${isAdmin ? `<button class="btn-edit-resp" onclick="event.stopPropagation();abrirModalResponsaveis(${t.codigo})" title="Editar responsáveis">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg></button>` : ''}
-            </div>
-            <div class="task-footer">
-                <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
-                    ${STATUSES.map(s => `<option ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}
-                </select>
-                ${isAdmin ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
-                    </svg></button>` : ''}
-            </div>
-            <div class="dblclick-hint">
-                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                Clique 2x para comentar
-            </div>
-        </div>`;
-    }).join('');
+    if (isMobile) {
+        grid.className = 'tasks-grid';
+        grid.innerHTML = filtradas.map(t => renderCard(t, isAdmin)).join('');
+    } else {
+        grid.className = 'tasks-table-wrap';
+        grid.innerHTML = `
+        <table class="tasks-table">
+            <thead>
+                <tr>
+                    <th>Responsável</th>
+                    <th>Tarefa</th>
+                    <th>Criação</th>
+                    <th>Prioridade</th>
+                    <th>Status</th>
+                    ${isAdmin ? '<th style="width:80px">Ações</th>' : ''}
+                </tr>
+            </thead>
+            <tbody>
+                ${filtradas.map(t => renderLinha(t, isAdmin)).join('')}
+            </tbody>
+        </table>`;
+    }
+}
+
+function renderCard(t, isAdmin) {
+    const cls = statusClass(t.status);
+    return `
+    <div class="task-card status-${cls}" ondblclick="abrirModalComentarios(${t.codigo})">
+        <div class="task-meta">
+            <span class="task-code">#${String(t.codigo).padStart(4,'0')}</span>
+            <span class="task-date">${t.data_criacao}</span>
+            ${badgePrioridade(t.prioridade)}
+            ${!t.compartilhada ? '<span class="badge-pessoal">🔒 Pessoal</span>' : ''}
+        </div>
+        <p class="task-desc">${escapar(t.descricao)}</p>
+        <div class="task-responsaveis">
+            ${renderResponsaveisAvatares(t.responsaveis)}
+            ${isAdmin && t.compartilhada ? `<button class="btn-edit-resp" onclick="event.stopPropagation();abrirModalResponsaveis(${t.codigo})" title="Editar responsáveis">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg></button>` : ''}
+        </div>
+        <div class="task-footer">
+            <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
+                ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+            ${isAdmin ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                </svg></button>` : ''}
+        </div>
+        <div class="dblclick-hint">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Clique 2x para comentar
+        </div>
+    </div>`;
+}
+
+function renderLinha(t, isAdmin) {
+    const nomes = t.responsaveis && t.responsaveis.length
+        ? t.responsaveis.map(r => `<span class="table-resp-chip">${escapar(iniciais(r.nome))}</span>`).join('')
+        : `<span class="sem-responsavel">${!t.compartilhada ? '🔒 Pessoal' : '—'}</span>`;
+
+    return `
+    <tr class="task-row" ondblclick="abrirModalComentarios(${t.codigo})">
+        <td class="td-resp">${nomes}</td>
+        <td class="td-desc">
+            <span class="table-desc">${escapar(t.descricao)}</span>
+            ${!t.compartilhada ? '<span class="badge-pessoal">Pessoal</span>' : ''}
+        </td>
+        <td class="td-date" style="white-space:nowrap">${t.data_criacao}</td>
+        <td class="td-prio">${badgePrioridade(t.prioridade)}</td>
+        <td class="td-status">
+            <select class="task-status-select compact" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
+                ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </td>
+        ${isAdmin ? `<td class="td-actions" onclick="event.stopPropagation()">
+            ${t.compartilhada ? `<button class="btn-icon" onclick="abrirModalResponsaveis(${t.codigo})" title="Responsáveis">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            </button>` : ''}
+            <button class="btn-icon btn-icon-danger" onclick="confirmarExcluirTarefa(${t.codigo})" title="Excluir">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                </svg>
+            </button>
+        </td>` : ''}
+    </tr>`;
+}
+
+function badgePrioridade(p) {
+    const cls = { 'Baixa': 'prio-baixa', 'Media': 'prio-media', 'Alta': 'prio-alta' };
+    const label = { 'Baixa': '↓ Baixa', 'Media': '→ Média', 'Alta': '↑ Alta' };
+    return `<span class="badge-prio ${cls[p] || 'prio-media'}">${label[p] || p}</span>`;
 }
 
 function renderResponsaveisAvatares(responsaveis) {
@@ -367,15 +431,13 @@ function renderResponsaveisAvatares(responsaveis) {
     </div>`;
 }
 
-function filtrarStatus(status, btn) {
-    filtroAtual = status;
-    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    renderizarTarefas();
-}
+// Rerenderiza ao redimensionar janela
+window.addEventListener('resize', () => {
+    if (todasTarefas.length) renderizarTarefas();
+});
 
 // ─────────────────────────────────────────
-// SELETOR MÚLTIPLO DE RESPONSÁVEIS
+// SELETOR DE RESPONSÁVEIS
 // ─────────────────────────────────────────
 function renderSeletorResponsaveis(containerId, selecionados = []) {
     const container = document.getElementById(containerId);
@@ -412,16 +474,28 @@ function getResponsaveisSelecionados(containerId) {
 async function abrirModalNovaTarefa() {
     const res = await api('/api/usuarios/colaborativos');
     if (res.ok) responsaveisDisponiveis = await res.json();
-    document.getElementById('nova-tarefa-desc').value = '';
+    document.getElementById('nova-tarefa-desc').value   = '';
+    document.getElementById('nova-tarefa-prio').value   = 'Media';
+    document.getElementById('nova-tarefa-shared').checked = true;
+    toggleCompartilhada(true);
     renderSeletorResponsaveis('responsaveis-criar', []);
     abrirModal('modal-nova-tarefa');
 }
 
+function toggleCompartilhada(compartilhada) {
+    const secaoResp = document.getElementById('secao-responsaveis');
+    secaoResp.style.display = compartilhada ? 'flex' : 'none';
+}
+
 async function criarTarefa() {
-    const descricao        = document.getElementById('nova-tarefa-desc').value.trim();
-    const responsaveis_ids = getResponsaveisSelecionados('responsaveis-criar');
+    const descricao      = document.getElementById('nova-tarefa-desc').value.trim();
+    const prioridade     = document.getElementById('nova-tarefa-prio').value;
+    const compartilhada  = document.getElementById('nova-tarefa-shared').checked;
+    const responsaveis_ids = compartilhada ? getResponsaveisSelecionados('responsaveis-criar') : [];
+
     if (!descricao) { toast('Informe uma descrição', 'error'); return; }
-    const res = await api('/api/tarefas', 'POST', { descricao, responsaveis_ids });
+
+    const res = await api('/api/tarefas', 'POST', { descricao, prioridade, compartilhada, responsaveis_ids });
     if (res.ok) { fecharModal('modal-nova-tarefa'); toast('✅ Tarefa criada!', 'success'); carregarTarefas(); }
     else { const e = await res.json(); toast(e.erro || 'Erro ao criar', 'error'); }
 }
@@ -474,7 +548,7 @@ async function excluirTarefa(codigo) {
 }
 
 // ─────────────────────────────────────────
-// COMENTÁRIOS + HISTÓRICO
+// COMENTÁRIOS
 // ─────────────────────────────────────────
 async function abrirModalComentarios(codigo) {
     tarefaAberta = codigo;
@@ -551,8 +625,7 @@ async function carregarUsuarios() {
                 <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                    Senha
+                    </svg> Senha
                 </button>
                 ${u.id !== usuarioLogado.id
                     ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
@@ -581,7 +654,6 @@ async function criarUsuario() {
     const senha       = document.getElementById('nu-senha').value;
 
     if (!nome || !funcao || !email || !senha) { toast('Preencha todos os campos', 'error'); return; }
-
     const erroSenha = validarSenhaForte(senha);
     if (erroSenha) { toast(erroSenha, 'error'); return; }
 
@@ -655,7 +727,6 @@ function statusClass(s) {
         'Iniciado':       'iniciado',
         'Em andamento':   'andamento',
         'Pausado':        'pausado',
-        'Em locação':     'locacao',
         'Aguardo retorno':'aguardo',
         'Finalizado':     'finalizado'
     };

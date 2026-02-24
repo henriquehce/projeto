@@ -15,82 +15,33 @@
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        /* ── Força de Senha ── */
-        .senha-strength {
-            margin-top: 8px;
-            margin-bottom: 4px;
-        }
-        .strength-bar-wrap {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 6px;
-        }
-        .strength-bar-wrap .bar {
-            flex: 1;
-            height: 4px;
-            border-radius: 99px;
-            background: var(--border, #2a2a3a);
-            transition: background 0.3s;
-        }
+        .senha-strength { margin-top: 8px; margin-bottom: 4px; }
+        .strength-bar-wrap { display: flex; gap: 4px; margin-bottom: 6px; }
+        .strength-bar-wrap .bar { flex: 1; height: 4px; border-radius: 99px; background: var(--border); transition: background 0.3s; }
         .strength-bar-wrap .bar.active-1 { background: #ef4444; }
         .strength-bar-wrap .bar.active-2 { background: #f97316; }
         .strength-bar-wrap .bar.active-3 { background: #eab308; }
         .strength-bar-wrap .bar.active-4 { background: #22c55e; }
-        .strength-label {
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: .04em;
-            margin-bottom: 8px;
-        }
-        .strength-label.s1 { color: #ef4444; }
-        .strength-label.s2 { color: #f97316; }
-        .strength-label.s3 { color: #eab308; }
-        .strength-label.s4 { color: #22c55e; }
-
-        /* ── Checklist de Requisitos ── */
-        .senha-checklist {
-            list-style: none;
-            padding: 0;
-            margin: 0 0 8px 0;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .senha-checklist li {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            color: var(--text-muted, #888);
-            transition: color 0.2s;
-        }
-        .senha-checklist li.ok {
-            color: #22c55e;
-        }
-        .senha-checklist li .chk-icon {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            border: 1.5px solid currentColor;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            font-size: 9px;
-            transition: background 0.2s, border-color 0.2s;
-        }
-        .senha-checklist li.ok .chk-icon {
-            background: #22c55e;
-            border-color: #22c55e;
-            color: #fff;
-        }
+        .strength-label { font-size: 11px; font-weight: 600; letter-spacing: .04em; margin-bottom: 8px; }
+        .strength-label.s1 { color: #ef4444; } .strength-label.s2 { color: #f97316; }
+        .strength-label.s3 { color: #eab308; } .strength-label.s4 { color: #22c55e; }
+        .senha-checklist { list-style: none; padding: 0; margin: 0 0 8px 0; display: flex; flex-direction: column; gap: 4px; }
+        .senha-checklist li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); transition: color 0.2s; }
+        .senha-checklist li.ok { color: #22c55e; }
+        .senha-checklist li .chk-icon { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 9px; }
+        .senha-checklist li.ok .chk-icon { background: #22c55e; border-color: #22c55e; color: #fff; }
+        .toggle-wrap { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; user-select: none; }
+        .toggle-wrap input[type=checkbox] { display: none; }
+        .toggle-track { width: 40px; height: 22px; background: var(--border2); border-radius: 11px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+        .toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform 0.2s; }
+        .toggle-wrap.on .toggle-track { background: var(--accent); }
+        .toggle-wrap.on .toggle-track::after { transform: translateX(18px); }
+        .toggle-label { font-size: 14px; color: var(--text); line-height: 1.3; }
+        .toggle-sublabel { font-size: 12px; color: var(--text-muted); }
     </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════
-     TELA DE LOGIN
-═══════════════════════════════════════ -->
 <div id="screen-login" class="screen active">
     <div class="login-bg">
         <div class="login-orb orb1"></div>
@@ -124,18 +75,10 @@
     </div>
 </div>
 
-
-<!-- ═══════════════════════════════════════
-     TELA PRINCIPAL (APP)
-═══════════════════════════════════════ -->
 <div id="screen-app" class="screen">
-
-    <!-- HEADER -->
     <header class="app-header">
         <div class="header-left">
-            <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">
-                <span></span><span></span><span></span>
-            </button>
+            <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu"><span></span><span></span><span></span></button>
             <div class="header-brand">
                 <span class="header-logo">TF</span>
                 <span class="header-title">TaskFlow</span>
@@ -143,9 +86,7 @@
         </div>
         <div class="header-right">
             <div id="header-badge" class="perfil-badge"></div>
-            <button class="avatar-btn" onclick="toggleUserMenu()" id="avatar-btn">
-                <span id="avatar-initials">?</span>
-            </button>
+            <button class="avatar-btn" onclick="toggleUserMenu()" id="avatar-btn"><span id="avatar-initials">?</span></button>
             <div id="user-menu" class="user-menu" style="display:none">
                 <div class="user-menu-info">
                     <p id="menu-nome" class="menu-nome"></p>
@@ -165,7 +106,6 @@
         </div>
     </header>
 
-    <!-- SIDEBAR -->
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
     <nav id="sidebar" class="sidebar">
         <div class="sidebar-header">
@@ -190,10 +130,7 @@
         </div>
     </nav>
 
-    <!-- CONTEÚDO PRINCIPAL -->
     <main class="app-main">
-
-        <!-- PÁGINA: TAREFAS -->
         <div id="page-tarefas" class="page active">
             <div class="page-header">
                 <div>
@@ -206,19 +143,22 @@
                 </button>
             </div>
 
-            <!-- FILTROS -->
+            <div class="search-filter-bar">
+                <div class="search-wrap">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" id="busca-tarefas" class="search-input" placeholder="Buscar por tarefa ou responsável..." oninput="buscarTarefas(this.value)">
+                </div>
+            </div>
             <div class="filters-bar">
                 <button class="filter-chip active" onclick="filtrarStatus('todos', this)">Todas</button>
                 <button class="filter-chip" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
                 <button class="filter-chip" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
                 <button class="filter-chip" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
                 <button class="filter-chip" onclick="filtrarStatus('Pausado', this)">Pausado</button>
-                <button class="filter-chip" onclick="filtrarStatus('Em locação', this)">Em locação</button>
                 <button class="filter-chip" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
                 <button class="filter-chip" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
             </div>
 
-            <!-- GRID DE TAREFAS -->
             <div id="tasks-grid" class="tasks-grid"></div>
             <div id="tasks-empty" class="empty-state" style="display:none">
                 <div class="empty-icon">📋</div>
@@ -226,7 +166,6 @@
             </div>
         </div>
 
-        <!-- PÁGINA: USUÁRIOS (ADMIN) -->
         <div id="page-usuarios" class="page">
             <div class="page-header">
                 <div>
@@ -240,14 +179,10 @@
             </div>
             <div id="usuarios-list" class="usuarios-list"></div>
         </div>
-
     </main>
 </div>
 
-
-<!-- ═══════════════════════════════════════
-     MODAL — NOVA TAREFA
-═══════════════════════════════════════ -->
+<!-- MODAL NOVA TAREFA -->
 <div id="modal-nova-tarefa" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-nova-tarefa')">
     <div class="modal-box">
         <div class="modal-header">
@@ -257,8 +192,28 @@
         <div class="modal-body">
             <label class="field-label">Descrição</label>
             <textarea id="nova-tarefa-desc" class="field-textarea" placeholder="Descreva a tarefa detalhadamente..." rows="3"></textarea>
-            <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(selecione um ou mais)</span></label>
-            <div id="responsaveis-criar" class="resp-selector"></div>
+
+            <label class="field-label">Prioridade</label>
+            <select id="nova-tarefa-prio" class="field-select">
+                <option value="Baixa">↓ Baixa</option>
+                <option value="Media" selected>→ Média</option>
+                <option value="Alta">↑ Alta</option>
+            </select>
+
+            <label class="field-label">Tipo de tarefa</label>
+            <label class="toggle-wrap on" id="toggle-compartilhada-wrap" onclick="handleToggleCompartilhada()">
+                <input type="checkbox" id="nova-tarefa-shared" checked>
+                <div class="toggle-track"></div>
+                <div>
+                    <p class="toggle-label">Tarefa compartilhada</p>
+                    <p class="toggle-sublabel" id="toggle-sublabel">Visível para outros usuários e responsáveis</p>
+                </div>
+            </label>
+
+            <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px">
+                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
+                <div id="responsaveis-criar" class="resp-selector"></div>
+            </div>
         </div>
         <div class="modal-footer">
             <button onclick="fecharModal('modal-nova-tarefa')" class="btn-ghost">Cancelar</button>
@@ -267,10 +222,7 @@
     </div>
 </div>
 
-
-<!-- ═══════════════════════════════════════
-     MODAL — COMENTÁRIOS / DETALHE
-═══════════════════════════════════════ -->
+<!-- MODAL COMENTÁRIOS -->
 <div id="modal-comentarios" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-comentarios')">
     <div class="modal-box modal-large">
         <div class="modal-header">
@@ -281,9 +233,7 @@
             <button onclick="fecharModal('modal-comentarios')" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-            <div class="comments-area" id="comments-area">
-                <p class="comments-empty">Nenhum comentário ainda.</p>
-            </div>
+            <div class="comments-area" id="comments-area"><p class="comments-empty">Nenhum comentário ainda.</p></div>
             <div class="comment-input-area">
                 <textarea id="novo-comentario-texto" class="field-textarea" placeholder="Escreva um comentário..." rows="2"></textarea>
                 <button onclick="enviarComentario()" class="btn-primary full">
@@ -295,10 +245,7 @@
     </div>
 </div>
 
-
-<!-- ═══════════════════════════════════════
-     MODAL — NOVO USUÁRIO
-═══════════════════════════════════════ -->
+<!-- MODAL NOVO USUÁRIO -->
 <div id="modal-novo-usuario" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-novo-usuario')">
     <div class="modal-box">
         <div class="modal-header">
@@ -319,22 +266,15 @@
             </select>
             <label class="field-label">Senha inicial</label>
             <div class="input-password-wrap">
-                <input type="password" id="nu-senha" class="field-input" placeholder="Mínimo 8 caracteres"
-                       autocomplete="new-password" oninput="atualizarForcaSenha('nu-senha','nu-strength')">
+                <input type="password" id="nu-senha" class="field-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" oninput="atualizarForcaSenha('nu-senha','nu-strength')">
                 <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('nu-senha', this)" tabindex="-1">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
             </div>
-            <!-- Força + checklist -->
             <div class="senha-strength" id="nu-strength" style="display:none">
-                <div class="strength-bar-wrap">
-                    <div class="bar" id="nu-bar1"></div>
-                    <div class="bar" id="nu-bar2"></div>
-                    <div class="bar" id="nu-bar3"></div>
-                    <div class="bar" id="nu-bar4"></div>
-                </div>
+                <div class="strength-bar-wrap"><div class="bar" id="nu-bar1"></div><div class="bar" id="nu-bar2"></div><div class="bar" id="nu-bar3"></div><div class="bar" id="nu-bar4"></div></div>
                 <div class="strength-label" id="nu-strength-label"></div>
-                <ul class="senha-checklist" id="nu-checklist">
+                <ul class="senha-checklist">
                     <li id="nu-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
                     <li id="nu-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
                     <li id="nu-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
@@ -351,9 +291,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     MODAL — EDITAR RESPONSÁVEIS
-═══════════════════════════════════════ -->
+<!-- MODAL RESPONSÁVEIS -->
 <div id="modal-responsaveis" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-responsaveis')">
     <div class="modal-box">
         <div class="modal-header">
@@ -363,9 +301,7 @@
             </div>
             <button onclick="fecharModal('modal-responsaveis')" class="modal-close">✕</button>
         </div>
-        <div class="modal-body">
-            <div id="responsaveis-editar" class="resp-selector"></div>
-        </div>
+        <div class="modal-body"><div id="responsaveis-editar" class="resp-selector"></div></div>
         <div class="modal-footer">
             <button onclick="fecharModal('modal-responsaveis')" class="btn-ghost">Cancelar</button>
             <button onclick="salvarResponsaveis()" class="btn-primary">Salvar</button>
@@ -373,45 +309,30 @@
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     MODAL — TROCAR SENHA (própria)
-═══════════════════════════════════════ -->
+<!-- MODAL TROCAR SENHA -->
 <div id="modal-trocar-senha" class="modal-overlay">
     <div class="modal-box">
         <div class="modal-header">
             <div>
                 <h3>Trocar Senha</h3>
-                <p class="modal-subtitle" id="trocar-senha-aviso" style="display:none;color:#f59e0b">
-                    ⚠️ Você precisa trocar sua senha antes de continuar.
-                </p>
+                <p class="modal-subtitle" id="trocar-senha-aviso" style="display:none;color:#f59e0b">⚠️ Você precisa trocar sua senha antes de continuar.</p>
             </div>
         </div>
         <div class="modal-body">
             <label class="field-label">Senha atual</label>
             <div class="input-password-wrap">
                 <input type="password" id="ts-atual" class="field-input" placeholder="Sua senha atual">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-atual',this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-atual',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
             </div>
             <label class="field-label">Nova senha</label>
             <div class="input-password-wrap">
-                <input type="password" id="ts-nova" class="field-input" placeholder="Mínimo 8 caracteres"
-                       oninput="atualizarForcaSenha('ts-nova','ts-strength')">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-nova',this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <input type="password" id="ts-nova" class="field-input" placeholder="Mínimo 8 caracteres" oninput="atualizarForcaSenha('ts-nova','ts-strength')">
+                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-nova',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
             </div>
-            <!-- Força + checklist -->
             <div class="senha-strength" id="ts-strength" style="display:none">
-                <div class="strength-bar-wrap">
-                    <div class="bar" id="ts-bar1"></div>
-                    <div class="bar" id="ts-bar2"></div>
-                    <div class="bar" id="ts-bar3"></div>
-                    <div class="bar" id="ts-bar4"></div>
-                </div>
+                <div class="strength-bar-wrap"><div class="bar" id="ts-bar1"></div><div class="bar" id="ts-bar2"></div><div class="bar" id="ts-bar3"></div><div class="bar" id="ts-bar4"></div></div>
                 <div class="strength-label" id="ts-strength-label"></div>
-                <ul class="senha-checklist" id="ts-checklist">
+                <ul class="senha-checklist">
                     <li id="ts-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
                     <li id="ts-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
                     <li id="ts-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
@@ -422,9 +343,7 @@
             <label class="field-label">Confirmar nova senha</label>
             <div class="input-password-wrap">
                 <input type="password" id="ts-conf" class="field-input" placeholder="Repita a nova senha">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-conf',this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-conf',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
             </div>
             <div id="ts-error" class="error-msg" style="display:none"></div>
         </div>
@@ -435,9 +354,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     MODAL — REDEFINIR SENHA (Admin)
-═══════════════════════════════════════ -->
+<!-- MODAL REDEFINIR SENHA -->
 <div id="modal-redefinir-senha" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-redefinir-senha')">
     <div class="modal-box">
         <div class="modal-header">
@@ -450,22 +367,13 @@
         <div class="modal-body">
             <label class="field-label">Nova senha</label>
             <div class="input-password-wrap">
-                <input type="password" id="rd-nova" class="field-input" placeholder="Mínimo 8 caracteres"
-                       oninput="atualizarForcaSenha('rd-nova','rd-strength')">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-nova',this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <input type="password" id="rd-nova" class="field-input" placeholder="Mínimo 8 caracteres" oninput="atualizarForcaSenha('rd-nova','rd-strength')">
+                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-nova',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
             </div>
-            <!-- Força + checklist -->
             <div class="senha-strength" id="rd-strength" style="display:none">
-                <div class="strength-bar-wrap">
-                    <div class="bar" id="rd-bar1"></div>
-                    <div class="bar" id="rd-bar2"></div>
-                    <div class="bar" id="rd-bar3"></div>
-                    <div class="bar" id="rd-bar4"></div>
-                </div>
+                <div class="strength-bar-wrap"><div class="bar" id="rd-bar1"></div><div class="bar" id="rd-bar2"></div><div class="bar" id="rd-bar3"></div><div class="bar" id="rd-bar4"></div></div>
                 <div class="strength-label" id="rd-strength-label"></div>
-                <ul class="senha-checklist" id="rd-checklist">
+                <ul class="senha-checklist">
                     <li id="rd-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
                     <li id="rd-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
                     <li id="rd-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
@@ -476,9 +384,7 @@
             <label class="field-label">Confirmar senha</label>
             <div class="input-password-wrap">
                 <input type="password" id="rd-conf" class="field-input" placeholder="Repita a senha">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-conf',this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-conf',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
             </div>
             <div id="rd-error" class="error-msg" style="display:none"></div>
         </div>
@@ -489,87 +395,46 @@
     </div>
 </div>
 
-<!-- TOAST NOTIFICATION -->
 <div id="toast" class="toast" style="display:none"></div>
 
 <script src="/static/js/app.js"></script>
 <script>
-// ═══════════════════════════════════════
-// VALIDAÇÃO DE FORÇA DE SENHA — Frontend
-// ═══════════════════════════════════════
+function handleToggleCompartilhada() {
+    const cb   = document.getElementById('nova-tarefa-shared');
+    const wrap = document.getElementById('toggle-compartilhada-wrap');
+    const sub  = document.getElementById('toggle-sublabel');
+    cb.checked = !cb.checked;
+    wrap.classList.toggle('on', cb.checked);
+    sub.textContent = cb.checked ? 'Visível para outros usuários e responsáveis' : 'Somente você terá acesso a esta tarefa';
+    toggleCompartilhada(cb.checked);
+}
 
 function calcularForca(senha) {
-    const regras = {
-        tamanho:   senha.length >= 8,
-        maiuscula: /[A-Z]/.test(senha),
-        minuscula: /[a-z]/.test(senha),
-        numero:    /\d/.test(senha),
-        especial:  /[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha)
-    };
-    const score = Object.values(regras).filter(Boolean).length;
-    return { regras, score };
+    const regras = { tamanho: senha.length >= 8, maiuscula: /[A-Z]/.test(senha), minuscula: /[a-z]/.test(senha), numero: /\d/.test(senha), especial: /[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha) };
+    return { regras, score: Object.values(regras).filter(Boolean).length };
 }
 
 function atualizarForcaSenha(inputId, containerId) {
     const prefixo = containerId.replace('-strength', '');
     const senha   = document.getElementById(inputId).value;
     const wrap    = document.getElementById(containerId);
-
-    if (!senha) {
-        wrap.style.display = 'none';
-        return;
-    }
+    if (!senha) { wrap.style.display = 'none'; return; }
     wrap.style.display = 'block';
-
     const { regras, score } = calcularForca(senha);
-
-    // Atualiza barras
-    const niveis = ['active-1','active-2','active-3','active-4'];
     for (let i = 1; i <= 4; i++) {
         const bar = document.getElementById(`${prefixo}-bar${i}`);
         bar.className = 'bar';
-        if (score >= i) {
-            // Mapeia score → classe de cor (score 1-2 = vermelho/laranja, 3 = amarelo, 4-5 = verde)
-            const cor = score <= 1 ? 'active-1'
-                      : score === 2 ? 'active-2'
-                      : score === 3 ? 'active-3'
-                      : 'active-4';
-            bar.classList.add(cor);
-        }
+        if (score >= i) bar.classList.add(score <= 1 ? 'active-1' : score === 2 ? 'active-2' : score === 3 ? 'active-3' : 'active-4');
     }
-
-    // Label
     const label = document.getElementById(`${prefixo}-strength-label`);
-    const textos = ['', 'Muito fraca', 'Fraca', 'Razoável', 'Boa', 'Forte'];
-    const classes = ['', 's1', 's1', 's3', 's4', 's4'];
-    label.textContent = textos[score];
-    label.className   = `strength-label ${classes[score]}`;
-
-    // Checklist
-    const mapa = { r1: 'tamanho', r2: 'maiuscula', r3: 'minuscula', r4: 'numero', r5: 'especial' };
+    label.textContent = ['','Muito fraca','Fraca','Razoável','Boa','Forte'][score];
+    label.className   = `strength-label ${['','s1','s1','s3','s4','s4'][score]}`;
+    const mapa = { r1:'tamanho', r2:'maiuscula', r3:'minuscula', r4:'numero', r5:'especial' };
     for (const [id, chave] of Object.entries(mapa)) {
         const li = document.getElementById(`${prefixo}-${id}`);
         if (li) li.classList.toggle('ok', regras[chave]);
     }
 }
-
-// Limpa o widget de força ao fechar os modais de senha
-(function() {
-    const origFechar = window.fecharModal;
-    if (typeof origFechar === 'function') {
-        window.fecharModal = function(id) {
-            ['nu-senha','ts-nova','rd-nova'].forEach(campo => {
-                const el = document.getElementById(campo);
-                if (el) el.value = '';
-            });
-            ['nu-strength','ts-strength','rd-strength'].forEach(w => {
-                const el = document.getElementById(w);
-                if (el) el.style.display = 'none';
-            });
-            origFechar(id);
-        };
-    }
-})();
 </script>
 </body>
 </html>
