@@ -500,7 +500,8 @@ function renderLinha(t, admin) {
                 ${t.anexos_count > 0 ? `<span class="action-badge blue">${t.anexos_count}</span>` : ''}
             </button>
         </td>`}
-    </tr>`;\n}
+    </tr>`;
+}
 
 function badgePrioridade(p) {
     if (p !== 'Alta') return '';
