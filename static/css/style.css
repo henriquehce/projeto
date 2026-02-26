@@ -311,8 +311,10 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.06em;
 }
-.perfil-badge.admin { background: rgba(244,63,94,0.15); color: var(--admin-clr); border: 1px solid rgba(244,63,94,0.3); }
-.perfil-badge.colab { background: rgba(16,185,129,0.12); color: var(--colab-clr); border: 1px solid rgba(16,185,129,0.25); }
+.perfil-badge.admin  { background: rgba(244,63,94,0.15);  color: var(--admin-clr); border: 1px solid rgba(244,63,94,0.3); }
+.perfil-badge.colab  { background: rgba(16,185,129,0.12); color: var(--colab-clr); border: 1px solid rgba(16,185,129,0.25); }
+.perfil-badge.master { background: rgba(139,92,246,0.18); color: #a78bfa;           border: 1px solid rgba(139,92,246,0.4); }
+.comment-author.master { color: #a78bfa; }
 
 .avatar-btn {
     width: 36px; height: 36px;

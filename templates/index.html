@@ -210,8 +210,10 @@
             </label>
 
             <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px">
-                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
+                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional)</span></label>
                 <div id="responsaveis-criar" class="resp-selector"></div>
+                <label class="field-label" style="margin-top:8px">Admins colaboradores <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
+                <div id="admins-criar" class="resp-selector"></div>
             </div>
         </div>
         <div class="modal-footer">
@@ -296,11 +298,16 @@
         <div class="modal-header">
             <div>
                 <h3 id="modal-resp-titulo">Responsáveis</h3>
-                <p class="modal-subtitle">Selecione um ou mais colaborativos</p>
+                <p class="modal-subtitle">Colaborativos e admins colaboradores</p>
             </div>
             <button onclick="fecharModal('modal-responsaveis')" class="modal-close">✕</button>
         </div>
-        <div class="modal-body"><div id="responsaveis-editar" class="resp-selector"></div></div>
+        <div class="modal-body">
+            <label class="field-label">Colaborativos</label>
+            <div id="responsaveis-editar" class="resp-selector"></div>
+            <label class="field-label" style="margin-top:12px">Admins colaboradores</label>
+            <div id="admins-editar" class="resp-selector"></div>
+        </div>
         <div class="modal-footer">
             <button onclick="fecharModal('modal-responsaveis')" class="btn-ghost">Cancelar</button>
             <button onclick="salvarResponsaveis()" class="btn-primary">Salvar</button>

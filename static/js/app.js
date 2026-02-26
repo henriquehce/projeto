@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════
-   TASKFLOW — JavaScript Principal v4
+   TASKFLOW — JavaScript Principal v5
 ═══════════════════════════════════════ */
 
 let usuarioLogado  = null;
@@ -9,6 +9,7 @@ let buscaAtual     = '';
 let tarefaAberta   = null;
 let deferredPrompt = null;
 let responsaveisDisponiveis = [];
+let adminsDisponiveis       = [];
 let tarefaEditandoResp      = null;
 let ordemAtual = { coluna: null, direcao: 'asc' };
 
@@ -16,8 +17,13 @@ const STATUSES = [
     'Não iniciado', 'Iniciado', 'Em andamento',
     'Pausado', 'Aguardo retorno', 'Finalizado'
 ];
-
 const PRIORIDADES = ['Nenhuma', 'Alta'];
+
+// ─────────────────────────────────────────
+// HELPERS DE PERFIL
+// ─────────────────────────────────────────
+function isAdmin()  { return usuarioLogado && (usuarioLogado.tipo_perfil === 'Administrador' || usuarioLogado.tipo_perfil === 'Admin Master'); }
+function isMaster() { return usuarioLogado && usuarioLogado.tipo_perfil === 'Admin Master'; }
 
 // ─────────────────────────────────────────
 // INICIALIZAÇÃO
@@ -209,20 +215,29 @@ async function salvarRedefinicaoSenha() {
 // ENTRAR NO APP
 // ─────────────────────────────────────────
 function entrarNoApp() {
-    const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
+    const admin  = isAdmin();
+    const master = isMaster();
     document.getElementById('screen-login').classList.remove('active');
     document.getElementById('screen-app').classList.add('active');
 
     const badge = document.getElementById('header-badge');
-    badge.textContent = isAdmin ? 'Admin' : 'Colaborativo';
-    badge.className   = 'perfil-badge ' + (isAdmin ? 'admin' : 'colab');
+    if (master) {
+        badge.textContent = 'Admin Master';
+        badge.className   = 'perfil-badge master';
+    } else if (admin) {
+        badge.textContent = 'Admin';
+        badge.className   = 'perfil-badge admin';
+    } else {
+        badge.textContent = 'Colaborativo';
+        badge.className   = 'perfil-badge colab';
+    }
 
     document.getElementById('avatar-initials').textContent = iniciais(usuarioLogado.nome);
     document.getElementById('menu-nome').textContent       = usuarioLogado.nome;
     document.getElementById('menu-funcao').textContent     = usuarioLogado.funcao;
 
-    document.getElementById('btn-nova-tarefa').style.display   = isAdmin ? 'flex'  : 'none';
-    document.getElementById('nav-usuarios-item').style.display = isAdmin ? 'block' : 'none';
+    document.getElementById('btn-nova-tarefa').style.display   = admin ? 'flex'  : 'none';
+    document.getElementById('nav-usuarios-item').style.display = admin ? 'block' : 'none';
 
     navTo('tarefas');
     carregarTarefas();
@@ -275,8 +290,8 @@ async function carregarTarefas() {
         if (res.ok) {
             todasTarefas = await res.json();
             const total  = todasTarefas.length;
-            const isAdmin = usuarioLogado.tipo_perfil === 'Administrador';
-            document.getElementById('tarefas-sub').textContent = isAdmin
+            const admin  = isAdmin();
+            document.getElementById('tarefas-sub').textContent = admin
                 ? `${total} tarefa${total !== 1 ? 's' : ''} no total`
                 : `${total} tarefa${total !== 1 ? 's' : ''} atribuída${total !== 1 ? 's' : ''} a você`;
             renderizarTarefas();
@@ -300,26 +315,11 @@ function getTarefasFiltradas() {
         lista = [...lista].sort((a, b) => {
             let va, vb;
             switch (ordemAtual.coluna) {
-                case 'responsavel':
-                    va = (a.responsaveis[0]?.nome || '').toLowerCase();
-                    vb = (b.responsaveis[0]?.nome || '').toLowerCase();
-                    break;
-                case 'descricao':
-                    va = a.descricao.toLowerCase();
-                    vb = b.descricao.toLowerCase();
-                    break;
-                case 'data':
-                    va = a.codigo; vb = b.codigo;
-                    break;
-                case 'prioridade': {
-                    const ord = { 'Alta': 2, 'Nenhuma': 1 };
-                    va = ord[a.prioridade] || 0; vb = ord[b.prioridade] || 0;
-                    break;
-                }
-                case 'status':
-                    va = STATUSES.indexOf(a.status);
-                    vb = STATUSES.indexOf(b.status);
-                    break;
+                case 'responsavel': va = (a.responsaveis[0]?.nome || '').toLowerCase(); vb = (b.responsaveis[0]?.nome || '').toLowerCase(); break;
+                case 'descricao':   va = a.descricao.toLowerCase(); vb = b.descricao.toLowerCase(); break;
+                case 'data':        va = a.codigo; vb = b.codigo; break;
+                case 'prioridade': { const ord = { 'Alta': 2, 'Nenhuma': 1 }; va = ord[a.prioridade] || 0; vb = ord[b.prioridade] || 0; break; }
+                case 'status':      va = STATUSES.indexOf(a.status); vb = STATUSES.indexOf(b.status); break;
                 default: return 0;
             }
             if (va < vb) return ordemAtual.direcao === 'asc' ? -1 : 1;
@@ -353,7 +353,7 @@ function buscarTarefas(valor) {
 }
 
 // ─────────────────────────────────────────
-// TAREFAS — RENDERIZAR (tabela no desktop, cards no mobile)
+// TAREFAS — RENDERIZAR
 // ─────────────────────────────────────────
 function renderizarTarefas() {
     const grid  = document.getElementById('tasks-grid');
@@ -363,17 +363,17 @@ function renderizarTarefas() {
     if (!filtradas.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
 
-    const isAdmin  = usuarioLogado.tipo_perfil === 'Administrador';
+    const admin    = isAdmin();
     const isMobile = window.innerWidth <= 768;
 
     if (isMobile) {
         grid.className = 'tasks-grid';
-        grid.innerHTML = filtradas.map(t => renderCard(t, isAdmin)).join('');
+        grid.innerHTML = filtradas.map(t => renderCard(t, admin)).join('');
     } else {
         grid.className = 'tasks-table-wrap';
         const th = (label, col) => {
-            const ativo  = ordemAtual.coluna === col;
-            const seta   = ativo ? (ordemAtual.direcao === 'asc' ? ' ↑' : ' ↓') : ' ↕';
+            const ativo = ordemAtual.coluna === col;
+            const seta  = ativo ? (ordemAtual.direcao === 'asc' ? ' ↑' : ' ↓') : ' ↕';
             const estilo = ativo ? 'color:var(--accent)' : 'color:var(--text-dim)';
             return `<th class="th-sort" onclick="ordenarPor('${col}')" style="cursor:pointer;user-select:none">
                 ${label}<span style="font-size:11px;${estilo}">${seta}</span>
@@ -381,25 +381,30 @@ function renderizarTarefas() {
         };
         grid.innerHTML = `
         <table class="tasks-table">
-            <thead>
-                <tr>
-                    ${th('Responsável','responsavel')}
-                    ${th('Tarefa','descricao')}
-                    ${th('Criação','data')}
-                    ${th('Prioridade','prioridade')}
-                    ${th('Status','status')}
-                    ${isAdmin ? '<th style="width:80px">Ações</th>' : ''}
-                </tr>
-            </thead>
-            <tbody>
-                ${filtradas.map(t => renderLinha(t, isAdmin)).join('')}
-            </tbody>
+            <thead><tr>
+                ${th('Responsável','responsavel')}
+                ${th('Tarefa','descricao')}
+                ${th('Criação','data')}
+                ${th('Prioridade','prioridade')}
+                ${th('Status','status')}
+                ${admin ? '<th style="width:80px">Ações</th>' : ''}
+            </tr></thead>
+            <tbody>${filtradas.map(t => renderLinha(t, admin)).join('')}</tbody>
         </table>`;
     }
 }
 
-function renderCard(t, isAdmin) {
-    const cls = statusClass(t.status);
+function renderCard(t, admin) {
+    const cls     = statusClass(t.status);
+    const podEditar = admin && t.compartilhada && (isMaster() || t.criado_por === usuarioLogado.id);
+    const podExcluir = admin && (isMaster() || t.criado_por === usuarioLogado.id);
+
+    // Badge de admins colaboradores
+    const adminsColab = (t.admins_colabs || []);
+    const adminsHtml  = adminsColab.length
+        ? `<span style="font-size:11px;color:var(--text-dim)" title="${escapar(adminsColab.map(a=>a.nome).join(', '))}">👥 +${adminsColab.length} admin${adminsColab.length>1?'s':''}</span>`
+        : '';
+
     return `
     <div class="task-card status-${cls}" ondblclick="abrirModalComentarios(${t.codigo})">
         <div class="task-meta">
@@ -411,7 +416,8 @@ function renderCard(t, isAdmin) {
         <p class="task-desc">${escapar(t.descricao)}</p>
         <div class="task-responsaveis">
             ${renderResponsaveisAvatares(t.responsaveis)}
-            ${isAdmin && t.compartilhada ? `<button class="btn-edit-resp" onclick="event.stopPropagation();abrirModalResponsaveis(${t.codigo})" title="Editar responsáveis">
+            ${adminsHtml}
+            ${podEditar ? `<button class="btn-edit-resp" onclick="event.stopPropagation();abrirModalResponsaveis(${t.codigo})" title="Editar responsáveis">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -421,7 +427,7 @@ function renderCard(t, isAdmin) {
             <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
                 ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
-            ${isAdmin ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
+            ${podExcluir ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
                 </svg></button>` : ''}
@@ -433,10 +439,13 @@ function renderCard(t, isAdmin) {
     </div>`;
 }
 
-function renderLinha(t, isAdmin) {
+function renderLinha(t, admin) {
     const nomes = t.responsaveis && t.responsaveis.length
         ? t.responsaveis.map(r => `<span class="table-resp-chip">${escapar(iniciais(r.nome))}</span>`).join('')
         : `<span class="sem-responsavel">${!t.compartilhada ? '🔒 Pessoal' : '—'}</span>`;
+
+    const podEditar  = admin && t.compartilhada && (isMaster() || t.criado_por === usuarioLogado.id);
+    const podExcluir = admin && (isMaster() || t.criado_por === usuarioLogado.id);
 
     return `
     <tr class="task-row" ondblclick="abrirModalComentarios(${t.codigo})">
@@ -452,15 +461,15 @@ function renderLinha(t, isAdmin) {
                 ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
         </td>
-        ${isAdmin ? `<td class="td-actions" onclick="event.stopPropagation()">
-            ${t.compartilhada ? `<button class="btn-icon" onclick="abrirModalResponsaveis(${t.codigo})" title="Responsáveis">
+        ${admin ? `<td class="td-actions" onclick="event.stopPropagation()">
+            ${podEditar ? `<button class="btn-icon" onclick="abrirModalResponsaveis(${t.codigo})" title="Responsáveis">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
             </button>` : ''}
-            <button class="btn-icon btn-icon-danger" onclick="confirmarExcluirTarefa(${t.codigo})" title="Excluir">
+            ${podExcluir ? `<button class="btn-icon btn-icon-danger" onclick="confirmarExcluirTarefa(${t.codigo})" title="Excluir">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
                 </svg>
-            </button>
+            </button>` : ''}
         </td>` : ''}
     </tr>`;
 }
@@ -480,13 +489,12 @@ function renderResponsaveisAvatares(responsaveis) {
     </div>`;
 }
 
-// Rerenderiza ao redimensionar janela
 window.addEventListener('resize', () => {
     if (todasTarefas.length) renderizarTarefas();
 });
 
 // ─────────────────────────────────────────
-// SELETOR DE RESPONSÁVEIS
+// SELETOR DE RESPONSÁVEIS (colaborativos)
 // ─────────────────────────────────────────
 function renderSeletorResponsaveis(containerId, selecionados = []) {
     const container = document.getElementById(containerId);
@@ -509,6 +517,31 @@ function renderSeletorResponsaveis(containerId, selecionados = []) {
     }).join('');
 }
 
+// ─────────────────────────────────────────
+// SELETOR DE ADMINS COLABORADORES
+// ─────────────────────────────────────────
+function renderSeletorAdmins(containerId, selecionados = []) {
+    const container = document.getElementById(containerId);
+    if (!adminsDisponiveis.length) {
+        container.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:12px">Nenhum outro administrador cadastrado.</p>';
+        return;
+    }
+    container.innerHTML = adminsDisponiveis.map(a => {
+        const marcado = selecionados.includes(a.id);
+        const badge   = a.tipo_perfil === 'Admin Master' ? ' 👑' : '';
+        return `
+        <label class="resp-checkbox ${marcado ? 'checked' : ''}" data-id="${a.id}">
+            <input type="checkbox" value="${a.id}" ${marcado ? 'checked' : ''} onchange="toggleResponsavelCheck(this)">
+            <div class="resp-check-avatar" style="background:var(--accent2,#7c3aed)">${iniciais(a.nome)}</div>
+            <div class="resp-check-info">
+                <span class="resp-check-nome">${escapar(a.nome)}${badge}</span>
+                <span class="resp-check-funcao">${escapar(a.funcao)}</span>
+            </div>
+            <div class="resp-check-mark">✓</div>
+        </label>`;
+    }).join('');
+}
+
 function toggleResponsavelCheck(checkbox) {
     checkbox.closest('label').classList.toggle('checked', checkbox.checked);
 }
@@ -521,30 +554,36 @@ function getResponsaveisSelecionados(containerId) {
 // CRIAR TAREFA
 // ─────────────────────────────────────────
 async function abrirModalNovaTarefa() {
-    const res = await api('/api/usuarios/colaborativos');
-    if (res.ok) responsaveisDisponiveis = await res.json();
-    document.getElementById('nova-tarefa-desc').value   = '';
-    document.getElementById('nova-tarefa-prio').value   = 'Nenhuma';
+    const [resColabs, resAdmins] = await Promise.all([
+        api('/api/usuarios/colaborativos'),
+        api('/api/usuarios/admins')
+    ]);
+    if (resColabs.ok) responsaveisDisponiveis = await resColabs.json();
+    if (resAdmins.ok) adminsDisponiveis       = await resAdmins.json();
+
+    document.getElementById('nova-tarefa-desc').value     = '';
+    document.getElementById('nova-tarefa-prio').value     = 'Nenhuma';
     document.getElementById('nova-tarefa-shared').checked = true;
     toggleCompartilhada(true);
     renderSeletorResponsaveis('responsaveis-criar', []);
+    renderSeletorAdmins('admins-criar', []);
     abrirModal('modal-nova-tarefa');
 }
 
 function toggleCompartilhada(compartilhada) {
-    const secaoResp = document.getElementById('secao-responsaveis');
-    secaoResp.style.display = compartilhada ? 'flex' : 'none';
+    document.getElementById('secao-responsaveis').style.display = compartilhada ? 'flex' : 'none';
 }
 
 async function criarTarefa() {
-    const descricao      = document.getElementById('nova-tarefa-desc').value.trim();
-    const prioridade     = document.getElementById('nova-tarefa-prio').value;
-    const compartilhada  = document.getElementById('nova-tarefa-shared').checked;
+    const descricao        = document.getElementById('nova-tarefa-desc').value.trim();
+    const prioridade       = document.getElementById('nova-tarefa-prio').value;
+    const compartilhada    = document.getElementById('nova-tarefa-shared').checked;
     const responsaveis_ids = compartilhada ? getResponsaveisSelecionados('responsaveis-criar') : [];
+    const admins_ids       = getResponsaveisSelecionados('admins-criar');
 
     if (!descricao) { toast('Informe uma descrição', 'error'); return; }
 
-    const res = await api('/api/tarefas', 'POST', { descricao, prioridade, compartilhada, responsaveis_ids });
+    const res = await api('/api/tarefas', 'POST', { descricao, prioridade, compartilhada, responsaveis_ids, admins_ids });
     if (res.ok) { fecharModal('modal-nova-tarefa'); toast('✅ Tarefa criada!', 'success'); carregarTarefas(); }
     else { const e = await res.json(); toast(e.erro || 'Erro ao criar', 'error'); }
 }
@@ -555,18 +594,35 @@ async function criarTarefa() {
 async function abrirModalResponsaveis(codigo) {
     tarefaEditandoResp = codigo;
     const tarefa = todasTarefas.find(t => t.codigo === codigo);
-    const res = await api('/api/usuarios/colaborativos');
-    if (res.ok) responsaveisDisponiveis = await res.json();
+
+    const [resColabs, resAdmins] = await Promise.all([
+        api('/api/usuarios/colaborativos'),
+        api('/api/usuarios/admins')
+    ]);
+    if (resColabs.ok) responsaveisDisponiveis = await resColabs.json();
+    if (resAdmins.ok) adminsDisponiveis       = await resAdmins.json();
+
     document.getElementById('modal-resp-titulo').textContent = `Responsáveis — Tarefa #${String(codigo).padStart(4,'0')}`;
-    renderSeletorResponsaveis('responsaveis-editar', tarefa ? tarefa.responsaveis.map(r => r.id) : []);
+
+    const selColabs = tarefa ? tarefa.responsaveis.map(r => r.id)    : [];
+    const selAdmins = tarefa ? (tarefa.admins_colabs || []).map(a => a.id) : [];
+
+    renderSeletorResponsaveis('responsaveis-editar', selColabs);
+    renderSeletorAdmins('admins-editar', selAdmins);
     abrirModal('modal-responsaveis');
 }
 
 async function salvarResponsaveis() {
-    const ids = getResponsaveisSelecionados('responsaveis-editar');
-    const res = await api(`/api/tarefas/${tarefaEditandoResp}/responsaveis`, 'PUT', { responsaveis_ids: ids });
-    if (res.ok) { fecharModal('modal-responsaveis'); toast('✅ Responsáveis atualizados!', 'success'); carregarTarefas(); }
-    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+    const idsColabs = getResponsaveisSelecionados('responsaveis-editar');
+    const idsAdmins = getResponsaveisSelecionados('admins-editar');
+
+    const [r1, r2] = await Promise.all([
+        api(`/api/tarefas/${tarefaEditandoResp}/responsaveis`, 'PUT', { responsaveis_ids: idsColabs }),
+        api(`/api/tarefas/${tarefaEditandoResp}/admins`,        'PUT', { admins_ids: idsAdmins })
+    ]);
+
+    if (r1.ok && r2.ok) { fecharModal('modal-responsaveis'); toast('✅ Atualizado!', 'success'); carregarTarefas(); }
+    else { const e = await (r1.ok ? r2 : r1).json(); toast(e.erro || 'Erro', 'error'); }
 }
 
 // ─────────────────────────────────────────
@@ -624,7 +680,7 @@ async function carregarComentarios(codigo) {
                     <span class="comment-date">${c.data_hora}</span>
                 </div>
             </div>`;
-        const cls = c.autor_perfil === 'Administrador' ? 'admin' : 'colab';
+        const cls = c.autor_perfil === 'Admin Master' ? 'master' : c.autor_perfil === 'Administrador' ? 'admin' : 'colab';
         return `
             <div class="comment-item">
                 <p class="comment-text">${escapar(c.texto)}</p>
@@ -657,7 +713,10 @@ async function carregarUsuarios() {
     if (!res.ok) return;
     const usuarios = await res.json();
     document.getElementById('usuarios-list').innerHTML = usuarios.map(u => {
-        const isAdmin = u.tipo_perfil === 'Administrador';
+        const master = u.tipo_perfil === 'Admin Master';
+        const admin  = u.tipo_perfil === 'Administrador';
+        const badgeClass = master ? 'master' : admin ? 'admin' : 'colab';
+        const podExcluir = u.id !== usuarioLogado.id && (isMaster() || (!master && !admin));
         return `
         <div class="usuario-card">
             <div class="usuario-info">
@@ -665,18 +724,18 @@ async function carregarUsuarios() {
                 <div>
                     <p class="usuario-nome">${escapar(u.nome)}</p>
                     <p class="usuario-email">${escapar(u.email)}</p>
-                    <p class="usuario-funcao">${escapar(u.funcao)}</p>
+                    <p class="usuario-funcao">${escapar(u.funcao)}${u.setor ? ' · ' + escapar(u.setor) : ''}</p>
                 </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
-                <span class="perfil-badge ${isAdmin ? 'admin' : 'colab'}">${u.tipo_perfil}</span>
+                <span class="perfil-badge ${badgeClass}">${u.tipo_perfil}</span>
                 ${u.trocar_senha ? '<span class="badge-senha">🔑 Troca pendente</span>' : ''}
                 <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg> Senha
                 </button>
-                ${u.id !== usuarioLogado.id
+                ${podExcluir
                     ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
@@ -689,7 +748,14 @@ async function carregarUsuarios() {
 
 function abrirModalNovoUsuario() {
     ['nu-nome','nu-funcao','nu-email','nu-senha'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('nu-perfil').value = 'Colaborativo';
+    // Admin normal nao pode criar Admin Master
+    const select = document.getElementById('nu-perfil');
+    select.innerHTML = `
+        <option value="Colaborativo">Colaborativo</option>
+        <option value="Administrador">Administrador</option>
+        ${isMaster() ? '<option value="Admin Master">Admin Master</option>' : ''}
+    `;
+    select.value = 'Colaborativo';
     const strength = document.getElementById('nu-strength');
     if (strength) strength.style.display = 'none';
     abrirModal('modal-novo-usuario');
@@ -718,7 +784,7 @@ function confirmarExcluirUsuario(id, nome) {
 async function excluirUsuario(id) {
     const res = await api(`/api/usuarios/${id}`, 'DELETE');
     if (res.ok) { toast('Usuário excluído', 'success'); carregarUsuarios(); }
-    else toast('Erro ao excluir', 'error');
+    else { const e = await res.json(); toast(e.erro || 'Erro ao excluir', 'error'); }
 }
 
 // ─────────────────────────────────────────
@@ -772,12 +838,8 @@ function escapar(str) {
 
 function statusClass(s) {
     const mapa = {
-        'Não iniciado':   'nao',
-        'Iniciado':       'iniciado',
-        'Em andamento':   'andamento',
-        'Pausado':        'pausado',
-        'Aguardo retorno':'aguardo',
-        'Finalizado':     'finalizado'
+        'Não iniciado': 'nao', 'Iniciado': 'iniciado', 'Em andamento': 'andamento',
+        'Pausado': 'pausado', 'Aguardo retorno': 'aguardo', 'Finalizado': 'finalizado'
     };
     return mapa[s] || 'nao';
 }
