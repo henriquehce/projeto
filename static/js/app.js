@@ -413,6 +413,7 @@ function renderCard(t, admin) {
             ${badgePrioridade(t.prioridade)}
             ${!t.compartilhada ? '<span class="badge-pessoal">🔒 Pessoal</span>' : ''}
         </div>
+        <div class="task-perspectiva">${badgesPerspectiva(t)}</div>
         <p class="task-desc">${escapar(t.descricao)}</p>
         <div class="task-responsaveis">
             ${renderResponsaveisAvatares(t.responsaveis)}
@@ -453,6 +454,7 @@ function renderLinha(t, admin) {
         <td class="td-desc">
             <span class="table-desc">${escapar(t.descricao)}</span>
             ${!t.compartilhada ? '<span class="badge-pessoal">Pessoal</span>' : ''}
+            ${badgesPerspectiva(t)}
         </td>
         <td class="td-date" style="white-space:nowrap">${t.data_criacao}</td>
         <td class="td-prio">${badgePrioridade(t.prioridade)}</td>
@@ -477,6 +479,13 @@ function renderLinha(t, admin) {
 function badgePrioridade(p) {
     if (p !== 'Alta') return '';
     return `<span class="badge-prio prio-alta">↑ Alta</span>`;
+}
+
+function badgesPerspectiva(t) {
+    let html = '';
+    if (t.delegada) html += `<span class="badge-perspectiva badge-delegada" title="Tarefa que você criou e delegou">↑ Delegada</span>`;
+    if (t.comigo)   html += `<span class="badge-perspectiva badge-comigo"   title="Tarefa atribuída a você para executar">↓ Comigo</span>`;
+    return html;
 }
 
 function renderResponsaveisAvatares(responsaveis) {

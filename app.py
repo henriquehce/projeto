@@ -146,7 +146,18 @@ class Tarefa(db.Model):
                                                    tarefa_admins.c.usuario_id])
     comentarios    = db.relationship('Comentario', backref='tarefa', lazy=True, cascade='all, delete-orphan')
 
-    def to_dict(self):
+    def to_dict(self, viewer_id=None):
+        # Calcula badges de perspectiva do viewer
+        delegada = False
+        comigo   = False
+        if viewer_id is not None:
+            resp_ids       = [u.id for u in self.responsaveis]
+            admin_colab_ids = [u.id for u in self.admins_colabs]
+            if self.criado_por == viewer_id:
+                delegada = True
+            if viewer_id in resp_ids or viewer_id in admin_colab_ids:
+                comigo = True
+
         return {
             'codigo':        self.codigo,
             'descricao':     self.descricao,
@@ -156,6 +167,8 @@ class Tarefa(db.Model):
             'compartilhada': self.compartilhada,
             'criado_por':    self.criado_por,
             'empresa':       self.empresa or '',
+            'delegada':      delegada,
+            'comigo':        comigo,
             'responsaveis':  [
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao, 'setor': u.setor or ''}
                 for u in self.responsaveis
@@ -598,23 +611,28 @@ PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
 def listar_tarefas():
     usuario = db.session.get(Usuario, session['usuario_id'])
     empresa = usuario.empresa
+    uid     = usuario.id
 
     if usuario.is_master():
         # Admin Master: ve TODAS as tarefas da empresa
         query = Tarefa.query.filter(
-            db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == usuario.id)
+            db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == uid)
         )
         if empresa:
             query = query.filter(Tarefa.empresa == empresa)
 
     elif usuario.is_admin():
-        # Administrador normal: ve apenas as suas proprias + tarefas onde e admin colab
+        # Administrador: suas proprias + admin colab + onde foi adicionado como responsavel
         query = Tarefa.query.filter(
             db.or_(
-                Tarefa.criado_por == usuario.id,
+                Tarefa.criado_por == uid,
                 Tarefa.codigo.in_(
                     db.session.query(tarefa_admins.c.tarefa_codigo)
-                    .filter(tarefa_admins.c.usuario_id == usuario.id)
+                    .filter(tarefa_admins.c.usuario_id == uid)
+                ),
+                Tarefa.codigo.in_(
+                    db.session.query(tarefa_responsaveis.c.tarefa_codigo)
+                    .filter(tarefa_responsaveis.c.usuario_id == uid)
                 )
             )
         )
@@ -622,14 +640,15 @@ def listar_tarefas():
             query = query.filter(Tarefa.empresa == empresa)
 
     else:
-        # Colaborativo: ve apenas tarefas atribuidas a ele
+        # Colaborativo: tarefas atribuidas a ele
         query = (Tarefa.query
                  .join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)
-                 .filter(tarefa_responsaveis.c.usuario_id == usuario.id))
+                 .filter(tarefa_responsaveis.c.usuario_id == uid))
         if empresa:
             query = query.filter(Tarefa.empresa == empresa)
 
-    return jsonify([t.to_dict() for t in query.order_by(Tarefa.codigo.desc()).all()])
+    tarefas = query.order_by(Tarefa.codigo.desc()).all()
+    return jsonify([t.to_dict(viewer_id=uid) for t in tarefas])
 
 
 @app.route('/api/tarefas', methods=['POST'])
