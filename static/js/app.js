@@ -416,6 +416,7 @@ function renderCard(t, admin) {
         </div>
         <div class="task-perspectiva">${badgesPerspectiva(t)}</div>
         <p class="task-desc">${escapar(t.descricao)}</p>
+        ${badgeChecklist(t)}
         <div class="task-responsaveis">
             ${renderResponsaveisAvatares(t.responsaveis)}
             ${adminsHtml}
@@ -429,6 +430,9 @@ function renderCard(t, admin) {
             <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
                 ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
+            <button class="btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalChecklist(${t.codigo})" title="Checklist">
+                ✅${t.checklist_total > 0 ? `<span class="badge-anexo" style="background:${t.checklist_concluidos===t.checklist_total&&t.checklist_total>0?'#22c55e':'var(--accent)'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
+            </button>
             <button class="btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalAnexos(${t.codigo})" title="Arquivos anexos">
                 📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
             </button>
@@ -459,6 +463,7 @@ function renderLinha(t, admin) {
             <span class="table-desc">${escapar(t.descricao)}</span>
             ${!t.compartilhada ? '<span class="badge-pessoal">Pessoal</span>' : ''}
             ${badgesPerspectiva(t)}
+            ${badgeChecklist(t)}
         </td>
         <td class="td-date" style="white-space:nowrap">${t.data_criacao}</td>
         <td class="td-prio">${badgePrioridade(t.prioridade)}</td>
@@ -468,6 +473,9 @@ function renderLinha(t, admin) {
             </select>
         </td>
         ${admin ? `<td class="td-actions" onclick="event.stopPropagation()">
+            <button class="btn-icon" onclick="abrirModalChecklist(${t.codigo})" title="Checklist">
+                ✅${t.checklist_total > 0 ? `<span class="badge-anexo" style="background:${t.checklist_concluidos===t.checklist_total&&t.checklist_total>0?'#22c55e':'var(--accent)'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
+            </button>
             <button class="btn-icon" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
                 📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
             </button>
@@ -890,9 +898,155 @@ async function excluirUsuario(id) {
     else { const e = await res.json(); toast(e.erro || 'Erro ao excluir', 'error'); }
 }
 
+function badgeChecklist(t) {
+    if (!t.checklist_total) return '';
+    const pct  = Math.round((t.checklist_concluidos / t.checklist_total) * 100);
+    const cor  = pct === 100 ? '#22c55e' : pct > 0 ? '#3b82f6' : '#64748b';
+    return `
+    <div class="checklist-mini" onclick="event.stopPropagation();abrirModalChecklist(${t.codigo})" title="Checklist — clique para abrir">
+        <div class="checklist-mini-bar-wrap">
+            <div class="checklist-mini-bar" style="width:${pct}%;background:${cor}"></div>
+        </div>
+        <span class="checklist-mini-label" style="color:${cor}">${t.checklist_concluidos}/${t.checklist_total}</span>
+    </div>`;
+}
+
 // ─────────────────────────────────────────
-// ANEXOS
+// CHECKLIST
 // ─────────────────────────────────────────
+async function abrirModalChecklist(codigo) {
+    tarefaAberta = codigo;
+    const tarefa = todasTarefas.find(t => t.codigo === codigo);
+    document.getElementById('checklist-titulo').textContent = `Checklist — Tarefa #${String(codigo).padStart(4,'0')}`;
+    document.getElementById('checklist-desc').textContent   = tarefa ? tarefa.descricao : '';
+    document.getElementById('novo-item-texto').value        = '';
+    document.getElementById('checklist-add-wrap').style.display = isAdmin() ? 'flex' : 'none';
+    await carregarChecklist(codigo);
+    abrirModal('modal-checklist');
+}
+
+async function carregarChecklist(codigo) {
+    const res  = await api(`/api/tarefas/${codigo}/checklist`);
+    if (!res.ok) return;
+    const itens = await res.json();
+    renderChecklist(itens);
+}
+
+function renderChecklist(itens) {
+    const area = document.getElementById('checklist-lista');
+    if (!itens.length) {
+        area.innerHTML = '<p class="comments-empty">Nenhum item no checklist ainda.</p>';
+        atualizarProgressoChecklist(0, 0);
+        return;
+    }
+    const total     = itens.length;
+    const concluidos = itens.filter(i => i.concluido).length;
+    atualizarProgressoChecklist(concluidos, total);
+
+    area.innerHTML = itens.map(item => {
+        const podeDel    = isAdmin();
+        const podeMarcar = true; // frontend sempre mostra, backend valida
+        return `
+        <div class="checklist-item ${item.concluido ? 'concluido' : ''}" id="ci-${item.id}">
+            <label class="ci-check-wrap" onclick="toggleChecklistItem(${item.id}, ${!item.concluido})">
+                <div class="ci-checkbox ${item.concluido ? 'checked' : ''}">
+                    ${item.concluido ? '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                </div>
+            </label>
+            <div class="ci-body">
+                <span class="ci-texto">${escapar(item.texto)}</span>
+                ${item.concluido && item.observacao ? `<p class="ci-obs">💬 ${escapar(item.observacao)}</p>` : ''}
+                ${item.concluido && item.concluido_por_nome ? `<span class="ci-meta">✓ ${escapar(item.concluido_por_nome)} · ${item.concluido_em}</span>` : ''}
+                ${!item.concluido && item.criado_por_nome ? `<span class="ci-meta">Adicionado por ${escapar(item.criado_por_nome)}</span>` : ''}
+            </div>
+            ${podeDel ? `<button class="btn-icon btn-icon-danger ci-del" onclick="removerItemChecklist(${item.id})" title="Remover item">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                </svg>
+            </button>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function atualizarProgressoChecklist(concluidos, total) {
+    const wrap = document.getElementById('checklist-progresso-wrap');
+    if (!total) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    const pct = Math.round((concluidos / total) * 100);
+    const cor = pct === 100 ? '#22c55e' : pct > 0 ? '#3b82f6' : '#64748b';
+    document.getElementById('checklist-bar').style.width      = pct + '%';
+    document.getElementById('checklist-bar').style.background = cor;
+    document.getElementById('checklist-pct').textContent      = `${concluidos} de ${total} (${pct}%)`;
+    document.getElementById('checklist-pct').style.color      = cor;
+}
+
+async function adicionarItemChecklist() {
+    const input = document.getElementById('novo-item-texto');
+    const texto = input.value.trim();
+    if (!texto) { toast('Digite o texto do item', 'error'); return; }
+    const res = await api(`/api/tarefas/${tarefaAberta}/checklist`, 'POST', { texto });
+    if (res.ok) {
+        input.value = '';
+        await carregarChecklist(tarefaAberta);
+        carregarTarefas();
+    } else {
+        const e = await res.json();
+        toast(e.erro || 'Erro ao adicionar', 'error');
+    }
+}
+
+// Modal intermediário para pedir observação ao marcar como concluído
+let checklistItemPendente = null;
+
+async function toggleChecklistItem(itemId, concluindo) {
+    if (concluindo) {
+        // Abre mini-modal para observação opcional
+        checklistItemPendente = itemId;
+        document.getElementById('obs-texto').value = '';
+        abrirModal('modal-obs-checklist');
+    } else {
+        // Desmarca direto, sem observação
+        await _marcarItem(itemId, false, '');
+    }
+}
+
+async function confirmarObsChecklist() {
+    const obs = document.getElementById('obs-texto').value.trim();
+    fecharModal('modal-obs-checklist');
+    await _marcarItem(checklistItemPendente, true, obs);
+    checklistItemPendente = null;
+}
+
+async function pularObsChecklist() {
+    fecharModal('modal-obs-checklist');
+    await _marcarItem(checklistItemPendente, true, '');
+    checklistItemPendente = null;
+}
+
+async function _marcarItem(itemId, concluido, observacao) {
+    const res = await api(`/api/checklist/${itemId}/marcar`, 'PATCH', { concluido, observacao });
+    if (res.ok) {
+        await carregarChecklist(tarefaAberta);
+        carregarTarefas();
+    } else {
+        const e = await res.json();
+        toast(e.erro || 'Erro ao atualizar item', 'error');
+    }
+}
+
+async function removerItemChecklist(itemId) {
+    if (!confirm('Remover este item do checklist?')) return;
+    const res = await api(`/api/checklist/${itemId}`, 'DELETE');
+    if (res.ok) {
+        await carregarChecklist(tarefaAberta);
+        carregarTarefas();
+    } else {
+        const e = await res.json();
+        toast(e.erro || 'Erro ao remover', 'error');
+    }
+}
+
+
 async function abrirModalAnexos(codigo) {
     tarefaAberta = codigo;
     const tarefa = todasTarefas.find(t => t.codigo === codigo);

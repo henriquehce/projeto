@@ -488,6 +488,64 @@ function atualizarForcaSenha(inputId, containerId) {
 }
 </script>
 
+<!-- MODAL CHECKLIST -->
+<div id="modal-checklist" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-checklist')">
+    <div class="modal-box" style="max-width:560px">
+        <div class="modal-header">
+            <h3 id="checklist-titulo">Checklist</h3>
+            <button onclick="fecharModal('modal-checklist')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <p id="checklist-desc" style="color:var(--text-dim);font-size:13px;margin:0 0 16px;line-height:1.5"></p>
+
+            <!-- Barra de progresso -->
+            <div id="checklist-progresso-wrap" style="display:none;margin-bottom:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <span style="font-size:12px;color:var(--text-dim);font-weight:600">PROGRESSO</span>
+                    <span id="checklist-pct" style="font-size:12px;font-weight:700"></span>
+                </div>
+                <div style="background:var(--surface2);border-radius:999px;height:8px;overflow:hidden">
+                    <div id="checklist-bar" style="height:100%;border-radius:999px;transition:width 0.3s ease;width:0%"></div>
+                </div>
+            </div>
+
+            <!-- Lista de itens -->
+            <div id="checklist-lista" style="margin-bottom:16px"></div>
+
+            <!-- Adicionar novo item (só admins) -->
+            <div id="checklist-add-wrap" style="display:none;gap:8px;align-items:center;border-top:1px solid var(--border);padding-top:16px">
+                <input type="text" id="novo-item-texto" class="field-input" placeholder="Novo item do checklist..."
+                    style="flex:1;margin:0"
+                    onkeydown="if(event.key==='Enter')adicionarItemChecklist()">
+                <button class="btn-primary btn-sm" onclick="adicionarItemChecklist()">+ Adicionar</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="fecharModal('modal-checklist')" class="btn-ghost">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MINI-MODAL: OBSERVAÇÃO AO MARCAR ITEM -->
+<div id="modal-obs-checklist" class="modal-overlay" style="z-index:1100">
+    <div class="modal-box" style="max-width:420px">
+        <div class="modal-header">
+            <h3>Observação (opcional)</h3>
+            <button onclick="fecharModal('modal-obs-checklist')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="color:var(--text-dim);font-size:13px;margin:0 0 12px">Adicione uma observação sobre este item antes de marcar como concluído.</p>
+            <textarea id="obs-texto" class="field-input" rows="3"
+                placeholder="Ex: Aprovado com ressalvas, verificar novamente em 30 dias..."
+                style="resize:vertical"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button onclick="pularObsChecklist()" class="btn-ghost">Pular</button>
+            <button onclick="confirmarObsChecklist()" class="btn-primary">Marcar como concluído</button>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL ANEXOS -->
 <div id="modal-anexos" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-anexos')">
     <div class="modal-box" style="max-width:560px">

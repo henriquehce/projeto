@@ -1268,3 +1268,92 @@ body {
     .modal-header button, #btn-relatorio, .modal-footer { display: none !important; }
     body > *:not(#modal-relatorio) { display: none !important; }
 }
+
+/* ══════════════════════════════════════
+   CHECKLIST — mini barra no card
+══════════════════════════════════════ */
+.checklist-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0 4px;
+    cursor: pointer;
+}
+.checklist-mini-bar-wrap {
+    flex: 1;
+    height: 5px;
+    background: var(--surface2);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.checklist-mini-bar {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+.checklist-mini-label {
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* ══════════════════════════════════════
+   CHECKLIST — modal lista de itens
+══════════════════════════════════════ */
+.checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+.checklist-item:last-child { border-bottom: none; }
+.checklist-item.concluido .ci-texto {
+    text-decoration: line-through;
+    color: var(--text-dim);
+}
+
+.ci-check-wrap { cursor: pointer; padding-top: 2px; flex-shrink: 0; }
+.ci-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+.ci-checkbox.checked {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #fff;
+}
+
+.ci-body { flex: 1; min-width: 0; }
+.ci-texto { font-size: 14px; color: var(--text-base); line-height: 1.4; display: block; }
+.ci-obs {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 4px 0 0;
+    background: var(--surface2);
+    border-left: 3px solid #22c55e;
+    padding: 4px 8px;
+    border-radius: 0 4px 4px 0;
+}
+.ci-meta {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 3px;
+}
+
+.ci-del {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.checklist-item:hover .ci-del { opacity: 1; }

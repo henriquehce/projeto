@@ -163,6 +163,9 @@ class Tarefa(db.Model):
     comentarios    = db.relationship('Comentario', backref='tarefa', lazy=True, cascade='all, delete-orphan')
     anexos         = db.relationship('Anexo', backref='tarefa', lazy=True, cascade='all, delete-orphan',
                                      foreign_keys='Anexo.id_tarefa')
+    checklist      = db.relationship('ChecklistItem', backref='tarefa', lazy=True, cascade='all, delete-orphan',
+                                     foreign_keys='ChecklistItem.id_tarefa',
+                                     order_by='ChecklistItem.ordem')
 
     def to_dict(self, viewer_id=None):
         # Calcula badges de perspectiva do viewer
@@ -195,7 +198,9 @@ class Tarefa(db.Model):
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao}
                 for u in self.admins_colabs
             ],
-            'anexos_count': len(self.anexos)
+            'anexos_count': len(self.anexos),
+            'checklist_total':     len(self.checklist),
+            'checklist_concluidos': sum(1 for i in self.checklist if i.concluido)
         }
 
 
@@ -240,6 +245,34 @@ class Anexo(db.Model):
             'data_upload':   self.data_upload.strftime('%d/%m/%Y %H:%M'),
             'uploader_nome': self.uploader.nome if self.uploader else 'Desconhecido',
             'url_download':  f'/api/anexos/{self.id}/download'
+        }
+
+
+class ChecklistItem(db.Model):
+    __tablename__ = 'checklist_items'
+    id           = db.Column(db.Integer, primary_key=True)
+    id_tarefa    = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
+    texto        = db.Column(db.String(500), nullable=False)
+    ordem        = db.Column(db.Integer, default=0)
+    concluido    = db.Column(db.Boolean, default=False)
+    observacao   = db.Column(db.Text, nullable=True)           # preenchida ao marcar
+    concluido_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    concluido_em  = db.Column(db.DateTime, nullable=True)
+    criado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    criado_em    = db.Column(db.DateTime, default=datetime.utcnow)
+    autor        = db.relationship('Usuario', foreign_keys=[criado_por])
+    executor     = db.relationship('Usuario', foreign_keys=[concluido_por])
+
+    def to_dict(self):
+        return {
+            'id':             self.id,
+            'texto':          self.texto,
+            'ordem':          self.ordem,
+            'concluido':      self.concluido,
+            'observacao':     self.observacao or '',
+            'concluido_por_nome': self.executor.nome if self.executor else None,
+            'concluido_em':   self.concluido_em.strftime('%d/%m/%Y %H:%M') if self.concluido_em else None,
+            'criado_por_nome': self.autor.nome if self.autor else None,
         }
 
 
@@ -1134,6 +1167,102 @@ def relatorio_pendencias():
         'por_usuario': resultado
     })
 
+
+# ─────────────────────────────────────────
+# CHECKLIST
+# ─────────────────────────────────────────
+def _pode_marcar_checklist(usuario, tarefa):
+    ids_resp      = [u.id for u in tarefa.responsaveis]
+    ids_adm_colab = [u.id for u in tarefa.admins_colabs]
+    if usuario.is_master():
+        return True
+    if usuario.tipo_perfil == 'Administrador':
+        return tarefa.criado_por == usuario.id or usuario.id in ids_adm_colab
+    return usuario.id in ids_resp
+
+def _pode_editar_checklist(usuario, tarefa):
+    if not usuario.is_admin():
+        return False
+    if usuario.is_master():
+        return True
+    ids_adm_colab = [u.id for u in tarefa.admins_colabs]
+    return tarefa.criado_por == usuario.id or usuario.id in ids_adm_colab
+
+
+@app.route('/api/tarefas/<int:codigo>/checklist', methods=['GET'])
+@login_required
+def listar_checklist(codigo):
+    tarefa  = db.session.get(Tarefa, codigo)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not tarefa:
+        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    if usuario.empresa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    return jsonify([i.to_dict() for i in tarefa.checklist])
+
+
+@app.route('/api/tarefas/<int:codigo>/checklist', methods=['POST'])
+@login_required
+def adicionar_item_checklist(codigo):
+    tarefa  = db.session.get(Tarefa, codigo)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not tarefa:
+        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    if usuario.empresa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    if not _pode_editar_checklist(usuario, tarefa):
+        return jsonify({'erro': 'Acesso negado'}), 403
+    texto = request.json.get('texto', '').strip()
+    if not texto:
+        return jsonify({'erro': 'Texto obrigatório'}), 400
+    max_ordem = db.session.query(db.func.max(ChecklistItem.ordem)).filter_by(id_tarefa=codigo).scalar() or 0
+    item = ChecklistItem(
+        id_tarefa=codigo, texto=texto,
+        ordem=max_ordem + 1, criado_por=session['usuario_id']
+    )
+    db.session.add(item)
+    db.session.commit()
+    return jsonify(item.to_dict()), 201
+
+
+@app.route('/api/checklist/<int:item_id>', methods=['DELETE'])
+@login_required
+def remover_item_checklist(item_id):
+    item    = db.session.get(ChecklistItem, item_id)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not item:
+        return jsonify({'erro': 'Item não encontrado'}), 404
+    tarefa = db.session.get(Tarefa, item.id_tarefa)
+    if usuario.empresa and tarefa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    if not _pode_editar_checklist(usuario, tarefa):
+        return jsonify({'erro': 'Acesso negado'}), 403
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({'mensagem': 'Item removido'}), 200
+
+
+@app.route('/api/checklist/<int:item_id>/marcar', methods=['PATCH'])
+@login_required
+def marcar_item_checklist(item_id):
+    item    = db.session.get(ChecklistItem, item_id)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not item:
+        return jsonify({'erro': 'Item não encontrado'}), 404
+    tarefa = db.session.get(Tarefa, item.id_tarefa)
+    if usuario.empresa and tarefa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    if not _pode_marcar_checklist(usuario, tarefa):
+        return jsonify({'erro': 'Acesso negado'}), 403
+    dados      = request.json
+    concluido  = dados.get('concluido', False)
+    observacao = dados.get('observacao', '').strip()
+    item.concluido     = concluido
+    item.observacao    = observacao if concluido else None
+    item.concluido_por = session['usuario_id'] if concluido else None
+    item.concluido_em  = datetime.utcnow() if concluido else None
+    db.session.commit()
+    return jsonify(item.to_dict()), 200
 
 
 if __name__ == '__main__':
