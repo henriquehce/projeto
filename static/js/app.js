@@ -238,6 +238,7 @@ function entrarNoApp() {
 
     document.getElementById('btn-nova-tarefa').style.display   = admin ? 'flex'  : 'none';
     document.getElementById('nav-usuarios-item').style.display = admin ? 'block' : 'none';
+    document.getElementById('btn-relatorio').style.display     = admin ? 'inline-flex' : 'none';
 
     navTo('tarefas');
     carregarTarefas();
@@ -387,7 +388,7 @@ function renderizarTarefas() {
                 ${th('Criação','data')}
                 ${th('Prioridade','prioridade')}
                 ${th('Status','status')}
-                ${admin ? '<th style="width:80px">Ações</th>' : ''}
+                <th style="width:100px">Ações</th>
             </tr></thead>
             <tbody>${filtradas.map(t => renderLinha(t, admin)).join('')}</tbody>
         </table>`;
@@ -428,6 +429,9 @@ function renderCard(t, admin) {
             <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
                 ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
+            <button class="btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalAnexos(${t.codigo})" title="Arquivos anexos">
+                📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
+            </button>
             ${podExcluir ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
@@ -464,6 +468,9 @@ function renderLinha(t, admin) {
             </select>
         </td>
         ${admin ? `<td class="td-actions" onclick="event.stopPropagation()">
+            <button class="btn-icon" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
+                📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
+            </button>
             ${podEditar ? `<button class="btn-icon" onclick="abrirModalResponsaveis(${t.codigo})" title="Responsáveis">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
             </button>` : ''}
@@ -472,7 +479,11 @@ function renderLinha(t, admin) {
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
                 </svg>
             </button>` : ''}
-        </td>` : ''}
+        </td>` : `<td onclick="event.stopPropagation()">
+            <button class="btn-icon" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
+                📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
+            </button>
+        </td>`}
     </tr>`;
 }
 
@@ -715,8 +726,25 @@ async function enviarComentario() {
 }
 
 // ─────────────────────────────────────────
-// USUÁRIOS
+// SETORES PRÉ-DEFINIDOS
 // ─────────────────────────────────────────
+const SETORES_PREDEFINIDOS = [
+    'TI', 'QA', 'Direção', 'Marketing', 'Comercial / Vendas',
+    'RH', 'Financeiro', 'Contabilidade', 'Jurídico', 'Logística',
+    'Operações', 'Compras', 'Suporte / Atendimento', 'Produção',
+    'Almoxarifado', 'Segurança', 'Administrativo', 'Outro'
+];
+
+function renderSelectSetor(selectId, valorAtual = '') {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = `<option value="">— Selecione o setor —</option>` +
+        SETORES_PREDEFINIDOS.map(s =>
+            `<option value="${s}" ${valorAtual === s ? 'selected' : ''}>${s}</option>`
+        ).join('');
+}
+
+
 async function carregarUsuarios() {
     const res = await api('/api/usuarios');
     if (!res.ok) return;
@@ -744,6 +772,12 @@ async function carregarUsuarios() {
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg> Senha
                 </button>
+                ${isMaster() && u.id !== usuarioLogado.id ? `<button class="btn-ghost btn-sm" onclick="abrirModalEditarUsuario(${u.id})" title="Editar usuário">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg> Editar
+                </button>` : ''}
                 ${podExcluir
                     ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -757,6 +791,7 @@ async function carregarUsuarios() {
 
 function abrirModalNovoUsuario() {
     ['nu-nome','nu-funcao','nu-email','nu-senha'].forEach(id => document.getElementById(id).value = '');
+    renderSelectSetor('nu-setor', '');
     // Admin normal nao pode criar Admin Master
     const select = document.getElementById('nu-perfil');
     select.innerHTML = `
@@ -776,14 +811,73 @@ async function criarUsuario() {
     const email       = document.getElementById('nu-email').value.trim();
     const tipo_perfil = document.getElementById('nu-perfil').value;
     const senha       = document.getElementById('nu-senha').value;
+    const setor       = document.getElementById('nu-setor')?.value || '';
 
     if (!nome || !funcao || !email || !senha) { toast('Preencha todos os campos', 'error'); return; }
     const erroSenha = validarSenhaForte(senha);
     if (erroSenha) { toast(erroSenha, 'error'); return; }
 
-    const res = await api('/api/usuarios', 'POST', { nome, funcao, email, tipo_perfil, senha });
+    const res = await api('/api/usuarios', 'POST', { nome, funcao, email, tipo_perfil, senha, setor });
     if (res.ok) { fecharModal('modal-novo-usuario'); toast('✅ Usuário cadastrado!', 'success'); carregarUsuarios(); }
     else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+}
+
+// ─────────────────────────────────────────
+// EDITAR USUÁRIO (Admin Master)
+// ─────────────────────────────────────────
+let usuarioEditando = null;
+
+function abrirModalEditarUsuario(uid) {
+    usuarioEditando = uid;
+
+    // Busca dados frescos do servidor
+    api('/api/usuarios').then(res => res.json()).then(lista => {
+        const u = lista.find(x => x.id === uid);
+        if (!u) return;
+
+        document.getElementById('eu-nome').value   = u.nome;
+        document.getElementById('eu-funcao').value = u.funcao;
+        document.getElementById('eu-email').textContent = u.email;
+        renderSelectSetor('eu-setor', u.setor || '');
+
+        const select = document.getElementById('eu-perfil');
+        const podePromorMaster = (usuarioLogado.email === 'henriquecipriani@gmail.com');
+        select.innerHTML = `
+            <option value="Colaborativo"   ${u.tipo_perfil==='Colaborativo'  ?'selected':''}>Colaborativo</option>
+            <option value="Administrador"  ${u.tipo_perfil==='Administrador' ?'selected':''}>Administrador</option>
+            ${podePromorMaster ? `<option value="Admin Master" ${u.tipo_perfil==='Admin Master'?'selected':''}>Admin Master</option>` : ''}
+        `;
+
+        document.getElementById('eu-titulo').textContent = `Editar — ${u.nome}`;
+        document.getElementById('eu-error').style.display = 'none';
+        abrirModal('modal-editar-usuario');
+    });
+}
+
+async function salvarEdicaoUsuario() {
+    const nome        = document.getElementById('eu-nome').value.trim();
+    const funcao      = document.getElementById('eu-funcao').value.trim();
+    const setor       = document.getElementById('eu-setor')?.value || '';
+    const tipo_perfil = document.getElementById('eu-perfil').value;
+    const errEl       = document.getElementById('eu-error');
+    errEl.style.display = 'none';
+
+    if (!nome || !funcao) {
+        errEl.textContent = 'Nome e cargo são obrigatórios.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const res = await api(`/api/usuarios/${usuarioEditando}`, 'PUT', { nome, funcao, setor, tipo_perfil });
+    if (res.ok) {
+        fecharModal('modal-editar-usuario');
+        toast('✅ Usuário atualizado!', 'success');
+        carregarUsuarios();
+    } else {
+        const e = await res.json();
+        errEl.textContent = e.erro || 'Erro ao salvar.';
+        errEl.style.display = 'block';
+    }
 }
 
 function confirmarExcluirUsuario(id, nome) {
@@ -797,8 +891,171 @@ async function excluirUsuario(id) {
 }
 
 // ─────────────────────────────────────────
-// MODAIS
+// ANEXOS
 // ─────────────────────────────────────────
+async function abrirModalAnexos(codigo) {
+    tarefaAberta = codigo;
+    const tarefa = todasTarefas.find(t => t.codigo === codigo);
+    document.getElementById('anexos-titulo').textContent = `Arquivos — Tarefa #${String(codigo).padStart(4,'0')}`;
+    document.getElementById('anexo-input').value = '';
+    document.getElementById('anexo-progresso').style.display = 'none';
+    await carregarAnexos(codigo);
+    abrirModal('modal-anexos');
+}
+
+async function carregarAnexos(codigo) {
+    const res  = await api(`/api/tarefas/${codigo}/anexos`);
+    const area = document.getElementById('anexos-lista');
+    if (!res.ok) return;
+    const itens = await res.json();
+    if (!itens.length) {
+        area.innerHTML = '<p class="comments-empty">Nenhum arquivo anexado.</p>';
+        return;
+    }
+    area.innerHTML = itens.map(a => {
+        const icone = iconePorMime(a.mime_type);
+        const podeDel = isMaster() || (usuarioLogado && a.uploader_nome === usuarioLogado.nome);
+        return `
+        <div class="anexo-item" id="anexo-${a.id}">
+            <div class="anexo-icon">${icone}</div>
+            <div class="anexo-info">
+                <a href="${a.url_download}" class="anexo-nome" download>${escapar(a.nome_original)}</a>
+                <span class="anexo-meta">${formataBytes(a.tamanho)} · ${a.data_upload} · ${escapar(a.uploader_nome)}</span>
+            </div>
+            ${podeDel ? `<button class="btn-icon btn-icon-danger" onclick="excluirAnexo(${a.id})" title="Excluir">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+                </svg>
+            </button>` : ''}
+        </div>`;
+    }).join('');
+}
+
+async function enviarAnexo() {
+    const input   = document.getElementById('anexo-input');
+    const arquivo = input.files[0];
+    if (!arquivo) { toast('Selecione um arquivo', 'error'); return; }
+
+    const MAX = 25 * 1024 * 1024;
+    if (arquivo.size > MAX) { toast('Arquivo muito grande (máx. 25MB)', 'error'); return; }
+
+    const prog = document.getElementById('anexo-progresso');
+    prog.style.display = 'block';
+    prog.textContent   = 'Enviando…';
+
+    const formData = new FormData();
+    formData.append('arquivo', arquivo);
+
+    try {
+        const res = await fetch(`/api/tarefas/${tarefaAberta}/anexos`, {
+            method: 'POST', body: formData, credentials: 'same-origin'
+        });
+        if (res.ok) {
+            input.value = '';
+            prog.style.display = 'none';
+            toast('✅ Arquivo enviado!', 'success');
+            await carregarAnexos(tarefaAberta);
+            carregarTarefas();
+        } else {
+            const e = await res.json();
+            prog.textContent = e.erro || 'Erro ao enviar';
+            toast(e.erro || 'Erro ao enviar', 'error');
+        }
+    } catch {
+        prog.textContent = 'Erro de conexão';
+        toast('Erro de conexão', 'error');
+    }
+}
+
+async function excluirAnexo(aid) {
+    if (!confirm('Excluir este arquivo?')) return;
+    const res = await api(`/api/anexos/${aid}`, 'DELETE');
+    if (res.ok) { toast('Arquivo excluído', 'success'); await carregarAnexos(tarefaAberta); carregarTarefas(); }
+    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+}
+
+function iconePorMime(mime) {
+    if (!mime) return '📄';
+    if (mime.includes('pdf'))   return '📕';
+    if (mime.includes('word') || mime.includes('document')) return '📘';
+    if (mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('csv')) return '📗';
+    if (mime.includes('powerpoint') || mime.includes('presentation')) return '📙';
+    if (mime.includes('image')) return '🖼️';
+    if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z')) return '🗜️';
+    if (mime.includes('video')) return '🎬';
+    return '📄';
+}
+
+function formataBytes(b) {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024*1024) return `${(b/1024).toFixed(1)} KB`;
+    return `${(b/1024/1024).toFixed(1)} MB`;
+}
+
+// ─────────────────────────────────────────
+// RELATÓRIO DE PENDÊNCIAS
+// ─────────────────────────────────────────
+async function abrirRelatorio() {
+    abrirModal('modal-relatorio');
+    document.getElementById('relatorio-corpo').innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px">Carregando…</p>';
+
+    const res = await api('/api/relatorio/pendencias');
+    if (!res.ok) { toast('Erro ao gerar relatório', 'error'); return; }
+    const dados = await res.json();
+    renderizarRelatorio(dados);
+}
+
+function renderizarRelatorio(dados) {
+    const corpo = document.getElementById('relatorio-corpo');
+    if (!dados.por_usuario.length) {
+        corpo.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px">🎉 Nenhuma pendência em aberto!</p>';
+        return;
+    }
+
+    const STATUS_COR = {
+        'Não iniciado': '#94a3b8', 'Iniciado': '#3b82f6', 'Em andamento': '#8b5cf6',
+        'Pausado': '#f59e0b', 'Aguardo retorno': '#f97316', 'Finalizado': '#22c55e'
+    };
+
+    corpo.innerHTML = `
+        <div class="relatorio-header-info">
+            <span>Gerado em: <strong>${dados.gerado_em}</strong></span>
+            <span>Total de pendências: <strong>${dados.total_tarefas}</strong></span>
+        </div>
+        ${dados.por_usuario.map(item => `
+        <div class="relatorio-pessoa">
+            <div class="relatorio-pessoa-header">
+                <div class="resp-avatar" style="width:36px;height:36px;font-size:14px">${iniciais(item.usuario.nome)}</div>
+                <div>
+                    <strong>${escapar(item.usuario.nome)}</strong>
+                    <span style="color:var(--text-dim);font-size:12px"> · ${escapar(item.usuario.funcao)}${item.usuario.setor ? ' / ' + escapar(item.usuario.setor) : ''}</span>
+                </div>
+                <span class="badge-relatorio-total">${item.total} pendência${item.total !== 1 ? 's' : ''}</span>
+            </div>
+            <table class="relatorio-table">
+                <thead><tr>
+                    <th>#</th><th>Descrição</th><th>Status</th><th>Prioridade</th><th>Criação</th>
+                </tr></thead>
+                <tbody>
+                ${item.tarefas.map(t => `
+                    <tr>
+                        <td style="color:var(--text-dim);font-size:12px">#${String(t.codigo).padStart(4,'0')}</td>
+                        <td>${escapar(t.descricao)}</td>
+                        <td><span style="color:${STATUS_COR[t.status]||'#94a3b8'};font-size:12px;font-weight:600">${t.status}</span></td>
+                        <td>${t.prioridade === 'Alta' ? '<span class="badge-prio prio-alta">↑ Alta</span>' : '<span style="color:var(--text-dim);font-size:12px">—</span>'}</td>
+                        <td style="color:var(--text-dim);font-size:12px;white-space:nowrap">${t.data_criacao}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`).join('')}
+    `;
+}
+
+function imprimirRelatorio() {
+    window.print();
+}
+
+
 function abrirModal(id) {
     document.getElementById(id).classList.add('active');
     document.body.style.overflow = 'hidden';

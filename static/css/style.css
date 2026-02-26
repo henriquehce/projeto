@@ -1152,3 +1152,119 @@ body {
     .tasks-grid { display: grid !important; }
     .search-wrap { max-width: 100%; }
 }
+
+/* ══════════════════════════════════════
+   BADGE ANEXO
+══════════════════════════════════════ */
+.badge-anexo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 2px;
+    vertical-align: middle;
+}
+
+/* ══════════════════════════════════════
+   MODAL ANEXOS — lista de arquivos
+══════════════════════════════════════ */
+.anexo-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+.anexo-icon { font-size: 22px; flex-shrink: 0; }
+.anexo-info { flex: 1; min-width: 0; }
+.anexo-nome {
+    display: block;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.anexo-nome:hover { text-decoration: underline; }
+.anexo-meta { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* ══════════════════════════════════════
+   RELATÓRIO DE PENDÊNCIAS
+══════════════════════════════════════ */
+.relatorio-header-info {
+    display: flex;
+    gap: 24px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.relatorio-pessoa {
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.relatorio-pessoa-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+}
+.badge-relatorio-total {
+    margin-left: auto;
+    background: rgba(239,68,68,0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 10px;
+    white-space: nowrap;
+}
+.relatorio-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.relatorio-table th {
+    background: var(--surface);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.relatorio-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-base);
+    vertical-align: middle;
+}
+.relatorio-table tr:last-child td { border-bottom: none; }
+.relatorio-table tr:hover td { background: var(--surface2); }
+
+@media print {
+    .modal-overlay { position: static !important; background: white !important; }
+    .modal-box { box-shadow: none !important; border: none !important; max-height: none !important; }
+    .modal-header button, #btn-relatorio, .modal-footer { display: none !important; }
+    body > *:not(#modal-relatorio) { display: none !important; }
+}

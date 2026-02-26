@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, session
+from flask import Flask, jsonify, request, render_template, session, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import urllib.request
@@ -9,6 +9,9 @@ import bcrypt
 import re
 import os
 import threading
+import uuid
+import mimetypes
+from werkzeug.utils import secure_filename
 
 try:
     from dotenv import load_dotenv
@@ -36,6 +39,19 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_SECURE']   = True
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Upload config
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB max
+
+EXTENSOES_PERMITIDAS = {
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+    'txt', 'csv', 'zip', 'rar', '7z',
+    'png', 'jpg', 'jpeg', 'gif', 'webp',
+    'mp4', 'mov', 'avi'
+}
 
 db   = SQLAlchemy(app)
 CORS(app)
@@ -145,6 +161,8 @@ class Tarefa(db.Model):
                                      foreign_keys=[tarefa_admins.c.tarefa_codigo,
                                                    tarefa_admins.c.usuario_id])
     comentarios    = db.relationship('Comentario', backref='tarefa', lazy=True, cascade='all, delete-orphan')
+    anexos         = db.relationship('Anexo', backref='tarefa', lazy=True, cascade='all, delete-orphan',
+                                     foreign_keys='Anexo.id_tarefa')
 
     def to_dict(self, viewer_id=None):
         # Calcula badges de perspectiva do viewer
@@ -176,7 +194,8 @@ class Tarefa(db.Model):
             'admins_colabs': [
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao}
                 for u in self.admins_colabs
-            ]
+            ],
+            'anexos_count': len(self.anexos)
         }
 
 
@@ -197,6 +216,30 @@ class Comentario(db.Model):
             'data_hora':    self.data_hora.strftime('%d/%m/%Y %H:%M:%S'),
             'autor_nome':   self.autor.nome if self.autor else 'Sistema',
             'autor_perfil': self.autor.tipo_perfil if self.autor else 'sistema'
+        }
+
+
+class Anexo(db.Model):
+    __tablename__ = 'anexos'
+    id           = db.Column(db.Integer, primary_key=True)
+    id_tarefa    = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
+    id_usuario   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    nome_original = db.Column(db.String(255), nullable=False)
+    nome_arquivo = db.Column(db.String(255), nullable=False)  # UUID filename on disk
+    tamanho      = db.Column(db.Integer, nullable=False)      # bytes
+    mime_type    = db.Column(db.String(100), nullable=True)
+    data_upload  = db.Column(db.DateTime, default=datetime.utcnow)
+    uploader     = db.relationship('Usuario', foreign_keys=[id_usuario])
+
+    def to_dict(self):
+        return {
+            'id':            self.id,
+            'nome_original': self.nome_original,
+            'tamanho':       self.tamanho,
+            'mime_type':     self.mime_type or '',
+            'data_upload':   self.data_upload.strftime('%d/%m/%Y %H:%M'),
+            'uploader_nome': self.uploader.nome if self.uploader else 'Desconhecido',
+            'url_download':  f'/api/anexos/{self.id}/download'
         }
 
 
@@ -551,7 +594,7 @@ def criar_usuario():
 
 
 @app.route('/api/usuarios/<int:uid>', methods=['PUT'])
-@admin_required
+@master_required
 def editar_usuario(uid):
     admin   = db.session.get(Usuario, session['usuario_id'])
     usuario = db.session.get(Usuario, uid)
@@ -559,12 +602,29 @@ def editar_usuario(uid):
         return jsonify({'erro': 'Usuario nao encontrado'}), 404
     if admin.empresa and usuario.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
+
     dados = request.json
-    if 'nome'   in dados: usuario.nome   = dados['nome']
-    if 'funcao' in dados: usuario.funcao = dados['funcao']
-    if 'setor'  in dados: usuario.setor  = dados['setor'] or None
+
+    if 'nome'   in dados: usuario.nome   = dados['nome'].strip()
+    if 'funcao' in dados: usuario.funcao = dados['funcao'].strip()
+    if 'setor'  in dados: usuario.setor  = dados['setor'].strip() or None
     if 'empresa' in dados and not admin.empresa:
-        usuario.empresa = dados['empresa'] or None
+        usuario.empresa = dados['empresa'].strip() or None
+
+    # Mudanca de perfil: apenas Admin Master pode alterar, e nao pode rebaixar outro Master
+    if 'tipo_perfil' in dados:
+        novo_perfil = dados['tipo_perfil']
+        perfis_validos = ['Colaborativo', 'Administrador', 'Admin Master']
+        if novo_perfil not in perfis_validos:
+            return jsonify({'erro': 'tipo_perfil invalido'}), 400
+        # Somente o email principal pode promover/criar Admin Master
+        if novo_perfil == 'Admin Master' and admin.email != ADMIN_MASTER_EMAIL:
+            return jsonify({'erro': 'Apenas o Admin Master principal pode promover outros a Admin Master'}), 403
+        # Nao pode rebaixar o Admin Master principal
+        if usuario.email == ADMIN_MASTER_EMAIL and novo_perfil != 'Admin Master':
+            return jsonify({'erro': 'Nao e possivel alterar o perfil do Admin Master principal'}), 403
+        usuario.tipo_perfil = novo_perfil
+
     db.session.commit()
     return jsonify(usuario.to_dict()), 200
 
@@ -887,8 +947,195 @@ def adicionar_comentario(codigo):
 
 
 # ─────────────────────────────────────────
-# INICIALIZACAO
+# ANEXOS
 # ─────────────────────────────────────────
+def extensao_permitida(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in EXTENSOES_PERMITIDAS
+
+def formatar_tamanho(b):
+    if b < 1024: return f'{b} B'
+    if b < 1024**2: return f'{b/1024:.1f} KB'
+    return f'{b/1024**2:.1f} MB'
+
+
+@app.route('/api/tarefas/<int:codigo>/anexos', methods=['GET'])
+@login_required
+def listar_anexos(codigo):
+    tarefa  = db.session.get(Tarefa, codigo)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not tarefa:
+        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    if usuario.empresa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    return jsonify([a.to_dict() for a in tarefa.anexos])
+
+
+@app.route('/api/tarefas/<int:codigo>/anexos', methods=['POST'])
+@login_required
+def upload_anexo(codigo):
+    tarefa  = db.session.get(Tarefa, codigo)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not tarefa:
+        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    if usuario.empresa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+
+    if 'arquivo' not in request.files:
+        return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
+    arquivo = request.files['arquivo']
+    if arquivo.filename == '':
+        return jsonify({'erro': 'Nome de arquivo vazio'}), 400
+    if not extensao_permitida(arquivo.filename):
+        return jsonify({'erro': 'Tipo de arquivo não permitido'}), 400
+
+    nome_original = secure_filename(arquivo.filename)
+    ext           = nome_original.rsplit('.', 1)[1].lower() if '.' in nome_original else ''
+    nome_uuid     = f'{uuid.uuid4().hex}.{ext}' if ext else uuid.uuid4().hex
+    caminho       = os.path.join(app.config['UPLOAD_FOLDER'], nome_uuid)
+    arquivo.save(caminho)
+    tamanho   = os.path.getsize(caminho)
+    mime_type = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
+
+    novo = Anexo(
+        id_tarefa=codigo, id_usuario=session['usuario_id'],
+        nome_original=arquivo.filename, nome_arquivo=nome_uuid,
+        tamanho=tamanho, mime_type=mime_type
+    )
+    db.session.add(novo)
+    registrar_historico(codigo, session['usuario_id'],
+        f'{usuario.nome} anexou o arquivo "{arquivo.filename}" ({formatar_tamanho(tamanho)}).')
+    db.session.commit()
+    return jsonify(novo.to_dict()), 201
+
+
+@app.route('/api/anexos/<int:aid>/download', methods=['GET'])
+@login_required
+def download_anexo(aid):
+    anexo   = db.session.get(Anexo, aid)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not anexo:
+        return jsonify({'erro': 'Anexo não encontrado'}), 404
+    tarefa = db.session.get(Tarefa, anexo.id_tarefa)
+    if usuario.empresa and tarefa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    caminho = os.path.join(app.config['UPLOAD_FOLDER'], anexo.nome_arquivo)
+    if not os.path.exists(caminho):
+        return jsonify({'erro': 'Arquivo não encontrado no servidor'}), 404
+    return send_from_directory(
+        app.config['UPLOAD_FOLDER'], anexo.nome_arquivo,
+        download_name=anexo.nome_original, as_attachment=True
+    )
+
+
+@app.route('/api/anexos/<int:aid>', methods=['DELETE'])
+@login_required
+def excluir_anexo(aid):
+    anexo   = db.session.get(Anexo, aid)
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not anexo:
+        return jsonify({'erro': 'Anexo não encontrado'}), 404
+    # Só o uploader, o criador da tarefa ou admin master pode excluir
+    tarefa = db.session.get(Tarefa, anexo.id_tarefa)
+    pode = (
+        anexo.id_usuario == usuario.id or
+        (tarefa and tarefa.criado_por == usuario.id) or
+        usuario.is_master()
+    )
+    if not pode:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    caminho = os.path.join(app.config['UPLOAD_FOLDER'], anexo.nome_arquivo)
+    if os.path.exists(caminho):
+        os.remove(caminho)
+    registrar_historico(anexo.id_tarefa, session['usuario_id'],
+        f'{usuario.nome} removeu o anexo "{anexo.nome_original}".')
+    db.session.delete(anexo)
+    db.session.commit()
+    return jsonify({'mensagem': 'Anexo excluído'}), 200
+
+
+# ─────────────────────────────────────────
+# RELATÓRIO DE PENDÊNCIAS
+# ─────────────────────────────────────────
+@app.route('/api/relatorio/pendencias', methods=['GET'])
+@admin_required
+def relatorio_pendencias():
+    admin   = db.session.get(Usuario, session['usuario_id'])
+    empresa = admin.empresa
+
+    # Tarefas não finalizadas, filtradas por empresa
+    query = Tarefa.query.filter(Tarefa.status != 'Finalizado')
+    if empresa:
+        query = query.filter(Tarefa.empresa == empresa)
+
+    # Admin normal: só suas tarefas
+    if not admin.is_master():
+        uid = admin.id
+        query = query.filter(
+            db.or_(
+                Tarefa.criado_por == uid,
+                Tarefa.codigo.in_(
+                    db.session.query(tarefa_admins.c.tarefa_codigo)
+                    .filter(tarefa_admins.c.usuario_id == uid)
+                ),
+                Tarefa.codigo.in_(
+                    db.session.query(tarefa_responsaveis.c.tarefa_codigo)
+                    .filter(tarefa_responsaveis.c.usuario_id == uid)
+                )
+            )
+        )
+
+    tarefas_pendentes = query.order_by(Tarefa.codigo.desc()).all()
+
+    # Agrupa por responsável
+    por_usuario = {}
+
+    for t in tarefas_pendentes:
+        if not t.compartilhada:
+            continue
+        ids_resp = [u.id for u in t.responsaveis]
+        # Tarefas sem responsável: atribui ao criador
+        if not ids_resp:
+            criador = db.session.get(Usuario, t.criado_por)
+            if criador:
+                uid = criador.id
+                if uid not in por_usuario:
+                    por_usuario[uid] = {'usuario': criador.to_dict(), 'tarefas': []}
+                por_usuario[uid]['tarefas'].append({
+                    'codigo': t.codigo,
+                    'descricao': t.descricao,
+                    'status': t.status,
+                    'prioridade': t.prioridade,
+                    'data_criacao': t.data_criacao.strftime('%d/%m/%Y'),
+                    'sem_responsavel': True
+                })
+        else:
+            for u in t.responsaveis:
+                uid = u.id
+                if uid not in por_usuario:
+                    por_usuario[uid] = {'usuario': u.to_dict(), 'tarefas': []}
+                por_usuario[uid]['tarefas'].append({
+                    'codigo': t.codigo,
+                    'descricao': t.descricao,
+                    'status': t.status,
+                    'prioridade': t.prioridade,
+                    'data_criacao': t.data_criacao.strftime('%d/%m/%Y'),
+                    'sem_responsavel': False
+                })
+
+    # Ordena por nome do usuário, e dentro por prioridade (Alta primeiro)
+    resultado = sorted(por_usuario.values(), key=lambda x: x['usuario']['nome'])
+    for item in resultado:
+        item['tarefas'] = sorted(item['tarefas'], key=lambda t: (0 if t['prioridade'] == 'Alta' else 1, t['codigo']))
+        item['total'] = len(item['tarefas'])
+
+    return jsonify({
+        'gerado_em': datetime.utcnow().strftime('%d/%m/%Y %H:%M'),
+        'total_tarefas': len(tarefas_pendentes),
+        'por_usuario': resultado
+    })
+
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
