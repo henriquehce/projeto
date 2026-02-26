@@ -1305,10 +1305,10 @@ body {
     flex-wrap: wrap;
 }
 .relatorio-pessoa {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    overflow: hidden;
+    overflow: visible;
 }
 .relatorio-pessoa-header {
     display: flex;
@@ -1317,6 +1317,7 @@ body {
     padding: 14px 16px;
     background: var(--surface2);
     border-bottom: 1px solid var(--border);
+    border-radius: 10px 10px 0 0;
 }
 .badge-relatorio-total {
     margin-left: auto;
@@ -1326,33 +1327,38 @@ body {
     border-radius: 999px;
     font-size: 12px;
     font-weight: 700;
-    padding: 2px 10px;
+    padding: 3px 12px;
     white-space: nowrap;
 }
 .relatorio-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+    display: table;
 }
 .relatorio-table th {
-    background: var(--surface);
+    background: rgba(255,255,255,0.03);
     color: var(--text-dim);
     font-weight: 600;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 8px 14px;
+    padding: 9px 16px;
     text-align: left;
     border-bottom: 1px solid var(--border);
 }
 .relatorio-table td {
-    padding: 9px 14px;
+    padding: 11px 16px;
     border-bottom: 1px solid var(--border);
     color: var(--text-base);
     vertical-align: middle;
 }
-.relatorio-table tr:last-child td { border-bottom: none; }
-.relatorio-table tr:hover td { background: var(--surface2); }
+.relatorio-table tbody tr:last-child td { border-bottom: none; }
+.relatorio-table tbody tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+.relatorio-table tbody tr:last-child td:last-child  { border-radius: 0 0 10px 0; }
+.relatorio-table tbody tr:hover td { background: rgba(255,255,255,0.03); }
 
 @media print {
     .modal-overlay { position: static !important; background: white !important; }
