@@ -50,18 +50,18 @@ from flask_migrate import Migrate
 migrate = Migrate(app, db)
 
 # ─────────────────────────────────────────
-# VALIDAÇÃO DE SENHA FORTE
+# VALIDACAO DE SENHA FORTE
 # ─────────────────────────────────────────
 def validar_senha_forte(senha):
     if len(senha) < 8:
         return False, 'A senha deve ter pelo menos 8 caracteres'
     if not re.search(r'[A-Z]', senha):
-        return False, 'A senha deve conter pelo menos 1 letra maiúscula'
+        return False, 'A senha deve conter pelo menos 1 letra maiuscula'
     if not re.search(r'[a-z]', senha):
-        return False, 'A senha deve conter pelo menos 1 letra minúscula'
+        return False, 'A senha deve conter pelo menos 1 letra minuscula'
     if not re.search(r'\d', senha):
-        return False, 'A senha deve conter pelo menos 1 número'
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>\-_=+\[\]\\;\'`~/]', senha):
+        return False, 'A senha deve conter pelo menos 1 numero'
+    if not re.search(r'[!@#$%^&*(),.?\":{}|<>\-_=+\[\]\\;\'`~/]', senha):
         return False, 'A senha deve conter pelo menos 1 caractere especial (!@#$%^&* etc.)'
     return True, None
 
@@ -79,6 +79,9 @@ class Usuario(db.Model):
     senha_hash    = db.Column(db.String(255), nullable=False)
     tipo_perfil   = db.Column(db.String(20), nullable=False)
     trocar_senha  = db.Column(db.Boolean, default=False)
+    # ── NOVOS CAMPOS ──
+    empresa       = db.Column(db.String(150), nullable=True)
+    setor         = db.Column(db.String(150), nullable=True)
     comentarios   = db.relationship('Comentario', backref='autor', lazy=True)
 
     def definir_senha(self, senha_plain):
@@ -98,7 +101,9 @@ class Usuario(db.Model):
             'funcao':       self.funcao,
             'email':        self.email,
             'tipo_perfil':  self.tipo_perfil,
-            'trocar_senha': self.trocar_senha
+            'trocar_senha': self.trocar_senha,
+            'empresa':      self.empresa or '',
+            'setor':        self.setor or ''
         }
 
 
@@ -107,10 +112,12 @@ class Tarefa(db.Model):
     codigo         = db.Column(db.Integer, primary_key=True, autoincrement=True)
     descricao      = db.Column(db.Text, nullable=False)
     data_criacao   = db.Column(db.DateTime, default=datetime.utcnow)
-    status         = db.Column(db.String(30), default='Não iniciado')
+    status         = db.Column(db.String(30), default='Nao iniciado')
     prioridade     = db.Column(db.String(10), default='Nenhuma')
     compartilhada  = db.Column(db.Boolean, default=True)
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    # ── NOVO CAMPO: empresa herdada do admin criador ──
+    empresa        = db.Column(db.String(150), nullable=True)
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
                                      backref=db.backref('tarefas_responsavel', lazy=True),
                                      foreign_keys=[tarefa_responsaveis.c.tarefa_codigo,
@@ -126,7 +133,11 @@ class Tarefa(db.Model):
             'prioridade':    self.prioridade,
             'compartilhada': self.compartilhada,
             'criado_por':    self.criado_por,
-            'responsaveis':  [{'id': u.id, 'nome': u.nome, 'funcao': u.funcao} for u in self.responsaveis]
+            'empresa':       self.empresa or '',
+            'responsaveis':  [
+                {'id': u.id, 'nome': u.nome, 'funcao': u.funcao, 'setor': u.setor or ''}
+                for u in self.responsaveis
+            ]
         }
 
 
@@ -151,16 +162,15 @@ class Comentario(db.Model):
 
 
 # ─────────────────────────────────────────
-# EMAIL HELPERS — Resend API (HTTP, sem SMTP)
+# EMAIL HELPERS — Brevo API (HTTP, sem SMTP)
 # ─────────────────────────────────────────
 
 def _enviar_async(destinatarios, assunto, corpo_html):
-    """Envia email via Brevo API em thread separada."""
     api_key = os.environ.get('BREVO_API_KEY')
     if not api_key:
         return
     payload = _json.dumps({
-        'sender':      { 'name': 'TaskFlow', 'email': 'henriquecipriani@gmail.com' },
+        'sender':      {'name': 'TaskFlow', 'email': os.environ.get('EMAIL_REMETENTE', 'noreply@taskflow.app')},
         'to':          [{'email': e} for e in destinatarios],
         'subject':     assunto,
         'htmlContent': corpo_html
@@ -168,10 +178,7 @@ def _enviar_async(destinatarios, assunto, corpo_html):
     req = urllib.request.Request(
         'https://api.brevo.com/v3/smtp/email',
         data=payload,
-        headers={
-            'api-key':      api_key,
-            'Content-Type': 'application/json'
-        },
+        headers={'api-key': api_key, 'Content-Type': 'application/json'},
         method='POST'
     )
     try:
@@ -182,7 +189,6 @@ def _enviar_async(destinatarios, assunto, corpo_html):
 
 
 def enviar_email(destinatarios, assunto, corpo_html):
-    """Dispara email sem bloquear a requisição."""
     if not os.environ.get('BREVO_API_KEY'):
         return
     if not destinatarios:
@@ -193,7 +199,6 @@ def enviar_email(destinatarios, assunto, corpo_html):
 
 
 def _template_base(titulo, conteudo):
-    """Template HTML base para todos os emails."""
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f4f4f4; padding: 20px;">
         <div style="background: #0f172a; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
@@ -204,21 +209,29 @@ def _template_base(titulo, conteudo):
             {conteudo}
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
             <p style="color: #94a3b8; font-size: 12px; margin: 0;">
-                Este é um email automático do TaskFlow. Não responda este email.
+                Este e um email automatico do TaskFlow. Nao responda este email.
             </p>
         </div>
     </div>
     """
 
 
-def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
-    """Notifica responsáveis recém-adicionados a uma tarefa."""
-    if not responsaveis_novos:
+def email_tarefa_criada(tarefa, responsaveis, admin_nome, admin_email):
+    """Notifica admins da empresa + responsaveis quando uma nova tarefa e criada."""
+    emails = set(u.email for u in responsaveis)
+    if tarefa.empresa:
+        admins = Usuario.query.filter_by(tipo_perfil='Administrador', empresa=tarefa.empresa).all()
+        for a in admins:
+            if a.email != admin_email:
+                emails.add(a.email)
+    if not emails:
         return
-    emails = [u.email for u in responsaveis_novos]
+
     prioridade_cor = {'Alta': '#ef4444', 'Media': '#f59e0b', 'Baixa': '#22c55e'}.get(tarefa.prioridade, '#64748b')
+    resp_nomes     = ', '.join(u.nome for u in responsaveis) if responsaveis else 'Nenhum'
+
     conteudo = f"""
-        <p>Olá! Você foi atribuído(a) à seguinte tarefa:</p>
+        <p>Uma nova tarefa foi criada no TaskFlow:</p>
         <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 4px; margin: 16px 0;">
             <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
             <p style="margin: 0 0 8px 0;"><strong>Status:</strong> {tarefa.status}</p>
@@ -226,35 +239,53 @@ def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
                 <strong>Prioridade:</strong>
                 <span style="color: {prioridade_cor}; font-weight: bold;">{tarefa.prioridade}</span>
             </p>
-            <p style="margin: 0;"><strong>Atribuída por:</strong> {admin_nome}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Responsaveis:</strong> {resp_nomes}</p>
+            <p style="margin: 0;"><strong>Criada por:</strong> {admin_nome}</p>
+        </div>
+        <p>Acesse o TaskFlow para visualizar os detalhes.</p>
+    """
+    enviar_email(list(emails), '[TaskFlow] Nova tarefa criada', _template_base('Nova tarefa criada', conteudo))
+
+
+def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
+    """Notifica responsaveis recem-adicionados a uma tarefa."""
+    if not responsaveis_novos:
+        return
+    prioridade_cor = {'Alta': '#ef4444', 'Media': '#f59e0b', 'Baixa': '#22c55e'}.get(tarefa.prioridade, '#64748b')
+    conteudo = f"""
+        <p>Ola! Voce foi atribuido(a) a seguinte tarefa:</p>
+        <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Status:</strong> {tarefa.status}</p>
+            <p style="margin: 0 0 8px 0;">
+                <strong>Prioridade:</strong>
+                <span style="color: {prioridade_cor}; font-weight: bold;">{tarefa.prioridade}</span>
+            </p>
+            <p style="margin: 0;"><strong>Atribuida por:</strong> {admin_nome}</p>
         </div>
         <p>Acesse o TaskFlow para visualizar os detalhes.</p>
     """
     enviar_email(
-        emails,
-        f'[TaskFlow] Você foi atribuído a uma tarefa',
-        _template_base('Nova tarefa atribuída a você', conteudo)
+        [u.email for u in responsaveis_novos],
+        '[TaskFlow] Voce foi atribuido a uma tarefa',
+        _template_base('Nova tarefa atribuida a voce', conteudo)
     )
 
 
 def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
     """Notifica todos os envolvidos na tarefa, exceto quem comentou."""
     envolvidos = set()
-    # Responsáveis da tarefa
     for u in tarefa.responsaveis:
         if u.id != autor_id:
             envolvidos.add(u.email)
-    # Admin criador da tarefa
     if tarefa.criado_por and tarefa.criado_por != autor_id:
         criador = db.session.get(Usuario, tarefa.criado_por)
         if criador:
             envolvidos.add(criador.email)
-
     if not envolvidos:
         return
-
     conteudo = f"""
-        <p>Um novo comentário foi adicionado à tarefa que você acompanha:</p>
+        <p>Um novo comentario foi adicionado a tarefa que voce acompanha:</p>
         <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 4px; margin: 16px 0;">
             <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
         </div>
@@ -262,52 +293,41 @@ def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
             <p style="margin: 0 0 4px 0; color: #64748b; font-size: 12px;"><strong>{autor_nome}</strong> comentou:</p>
             <p style="margin: 0; color: #0f172a;">{comentario_texto}</p>
         </div>
-        <p>Acesse o TaskFlow para responder ou ver o histórico completo.</p>
+        <p>Acesse o TaskFlow para responder ou ver o historico completo.</p>
     """
-    enviar_email(
-        list(envolvidos),
-        f'[TaskFlow] Novo comentário na tarefa',
-        _template_base('Novo comentário adicionado', conteudo)
-    )
+    enviar_email(list(envolvidos), '[TaskFlow] Novo comentario na tarefa', _template_base('Novo comentario adicionado', conteudo))
 
 
 def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nome):
-    """Notifica os responsáveis da tarefa quando o status muda."""
-    emails = [u.email for u in tarefa.responsaveis]
+    """Notifica responsaveis e criador quando o status muda."""
+    emails = list({u.email for u in tarefa.responsaveis})
+    if tarefa.criado_por:
+        criador = db.session.get(Usuario, tarefa.criado_por)
+        if criador and criador.email not in emails:
+            emails.append(criador.email)
     if not emails:
         return
 
     STATUS_COR = {
-        'Não iniciado':  '#94a3b8',
-        'Iniciado':      '#3b82f6',
-        'Em andamento':  '#8b5cf6',
-        'Pausado':       '#f59e0b',
+        'Nao iniciado':    '#94a3b8',
+        'Iniciado':        '#3b82f6',
+        'Em andamento':    '#8b5cf6',
+        'Pausado':         '#f59e0b',
         'Aguardo retorno': '#f97316',
-        'Finalizado':    '#22c55e',
+        'Finalizado':      '#22c55e',
     }
     cor_novo = STATUS_COR.get(status_novo, '#64748b')
-
     conteudo = f"""
         <p>O status de uma tarefa foi atualizado:</p>
         <div style="background: #f8fafc; border-left: 4px solid {cor_novo}; padding: 16px; border-radius: 4px; margin: 16px 0;">
             <p style="margin: 0 0 8px 0;"><strong>Tarefa:</strong> {tarefa.descricao}</p>
-            <p style="margin: 0 0 8px 0;">
-                <strong>Status anterior:</strong>
-                <span style="color: #64748b;">{status_anterior}</span>
-            </p>
-            <p style="margin: 0 0 8px 0;">
-                <strong>Novo status:</strong>
-                <span style="color: {cor_novo}; font-weight: bold;">{status_novo}</span>
-            </p>
+            <p style="margin: 0 0 8px 0;"><strong>Status anterior:</strong> <span style="color: #64748b;">{status_anterior}</span></p>
+            <p style="margin: 0 0 8px 0;"><strong>Novo status:</strong> <span style="color: {cor_novo}; font-weight: bold;">{status_novo}</span></p>
             <p style="margin: 0;"><strong>Alterado por:</strong> {alterado_por_nome}</p>
         </div>
         <p>Acesse o TaskFlow para mais detalhes.</p>
     """
-    enviar_email(
-        emails,
-        f'[TaskFlow] Status da tarefa atualizado para "{status_novo}"',
-        _template_base('Status da tarefa atualizado', conteudo)
-    )
+    enviar_email(emails, f'[TaskFlow] Status da tarefa atualizado para "{status_novo}"', _template_base('Status da tarefa atualizado', conteudo))
 
 
 # ─────────────────────────────────────────
@@ -329,7 +349,7 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'usuario_id' not in session:
-            return jsonify({'erro': 'Não autenticado'}), 401
+            return jsonify({'erro': 'Nao autenticado'}), 401
         return f(*args, **kwargs)
     return decorated
 
@@ -338,7 +358,7 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'usuario_id' not in session:
-            return jsonify({'erro': 'Não autenticado'}), 401
+            return jsonify({'erro': 'Nao autenticado'}), 401
         u = db.session.get(Usuario, session['usuario_id'])
         if not u or u.tipo_perfil != 'Administrador':
             return jsonify({'erro': 'Acesso negado. Apenas administradores.'}), 403
@@ -355,7 +375,7 @@ def index():
 
 
 # ─────────────────────────────────────────
-# AUTENTICAÇÃO
+# AUTENTICACAO
 # ─────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -363,7 +383,7 @@ def login():
     email = dados.get('email', '').strip().lower()
     senha = dados.get('senha', '')
     if not email or not senha:
-        return jsonify({'erro': 'E-mail e senha são obrigatórios'}), 400
+        return jsonify({'erro': 'E-mail e senha sao obrigatorios'}), 400
     usuario = Usuario.query.filter_by(email=email).first()
     if not usuario or not usuario.verificar_senha(senha):
         return jsonify({'erro': 'E-mail ou senha incorretos'}), 401
@@ -403,7 +423,7 @@ def trocar_senha():
         return jsonify({'erro': erro}), 400
 
     if senha_nova != senha_conf:
-        return jsonify({'erro': 'A confirmação de senha não confere'}), 400
+        return jsonify({'erro': 'A confirmacao de senha nao confere'}), 400
 
     usuario = db.session.get(Usuario, session['usuario_id'])
     if not usuario.verificar_senha(senha_atual):
@@ -418,9 +438,12 @@ def trocar_senha():
 @app.route('/api/usuarios/<int:uid>/redefinir-senha', methods=['POST'])
 @admin_required
 def redefinir_senha(uid):
+    admin   = db.session.get(Usuario, session['usuario_id'])
     usuario = db.session.get(Usuario, uid)
     if not usuario:
-        return jsonify({'erro': 'Usuário não encontrado'}), 404
+        return jsonify({'erro': 'Usuario nao encontrado'}), 404
+    if admin.empresa and usuario.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
     nova_senha = request.json.get('senha_nova', '')
     valida, erro = validar_senha_forte(nova_senha)
     if not valida:
@@ -432,18 +455,29 @@ def redefinir_senha(uid):
 
 
 # ─────────────────────────────────────────
-# USUÁRIOS
+# USUARIOS
 # ─────────────────────────────────────────
 @app.route('/api/usuarios', methods=['GET'])
 @login_required
 def listar_usuarios():
-    return jsonify([u.to_dict() for u in Usuario.query.all()])
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    # Isolamento por empresa: cada usuario so ve quem e da mesma empresa
+    if usuario.empresa:
+        usuarios = Usuario.query.filter_by(empresa=usuario.empresa).all()
+    else:
+        usuarios = Usuario.query.all()
+    return jsonify([u.to_dict() for u in usuarios])
 
 
 @app.route('/api/usuarios/colaborativos', methods=['GET'])
 @login_required
 def listar_colaborativos():
-    return jsonify([u.to_dict() for u in Usuario.query.filter_by(tipo_perfil='Colaborativo').all()])
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if usuario.empresa:
+        colaborativos = Usuario.query.filter_by(tipo_perfil='Colaborativo', empresa=usuario.empresa).all()
+    else:
+        colaborativos = Usuario.query.filter_by(tipo_perfil='Colaborativo').all()
+    return jsonify([u.to_dict() for u in colaborativos])
 
 
 @app.route('/api/usuarios', methods=['POST'])
@@ -452,22 +486,31 @@ def criar_usuario():
     dados = request.json
     for campo in ['nome', 'funcao', 'email', 'tipo_perfil', 'senha']:
         if not dados.get(campo):
-            return jsonify({'erro': f'Campo "{campo}" obrigatório'}), 400
+            return jsonify({'erro': f'Campo "{campo}" obrigatorio'}), 400
 
     if dados['tipo_perfil'] not in ['Administrador', 'Colaborativo']:
-        return jsonify({'erro': 'tipo_perfil inválido'}), 400
+        return jsonify({'erro': 'tipo_perfil invalido'}), 400
 
     valida, erro = validar_senha_forte(dados['senha'])
     if not valida:
         return jsonify({'erro': erro}), 400
 
     if Usuario.query.filter_by(email=dados['email'].lower()).first():
-        return jsonify({'erro': 'E-mail já cadastrado'}), 409
+        return jsonify({'erro': 'E-mail ja cadastrado'}), 409
+
+    admin = db.session.get(Usuario, session['usuario_id'])
+
+    # Empresa: usa a do admin criador (garante isolamento); permite sobrescrever so se admin nao tiver empresa
+    empresa = admin.empresa or dados.get('empresa') or None
 
     novo = Usuario(
-        nome=dados['nome'], funcao=dados['funcao'],
-        email=dados['email'].lower(), tipo_perfil=dados['tipo_perfil'],
-        trocar_senha=True
+        nome=dados['nome'],
+        funcao=dados['funcao'],
+        email=dados['email'].lower(),
+        tipo_perfil=dados['tipo_perfil'],
+        trocar_senha=True,
+        empresa=empresa,
+        setor=dados.get('setor') or None
     )
     novo.definir_senha(dados['senha'])
     db.session.add(novo)
@@ -475,27 +518,63 @@ def criar_usuario():
     return jsonify(novo.to_dict()), 201
 
 
+@app.route('/api/usuarios/<int:uid>', methods=['PUT'])
+@admin_required
+def editar_usuario(uid):
+    """Edita dados de um usuario (nome, funcao, empresa, setor)."""
+    admin   = db.session.get(Usuario, session['usuario_id'])
+    usuario = db.session.get(Usuario, uid)
+    if not usuario:
+        return jsonify({'erro': 'Usuario nao encontrado'}), 404
+    if admin.empresa and usuario.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+
+    dados = request.json
+    if 'nome'    in dados: usuario.nome    = dados['nome']
+    if 'funcao'  in dados: usuario.funcao  = dados['funcao']
+    if 'setor'   in dados: usuario.setor   = dados['setor'] or None
+    # So super-admins (sem empresa) podem mudar a empresa de um usuario
+    if 'empresa' in dados and not admin.empresa:
+        usuario.empresa = dados['empresa'] or None
+
+    db.session.commit()
+    return jsonify(usuario.to_dict()), 200
+
+
 @app.route('/api/usuarios/<int:uid>', methods=['DELETE'])
 @admin_required
 def excluir_usuario(uid):
+    admin   = db.session.get(Usuario, session['usuario_id'])
     usuario = db.session.get(Usuario, uid)
     if not usuario:
-        return jsonify({'erro': 'Usuário não encontrado'}), 404
+        return jsonify({'erro': 'Usuario nao encontrado'}), 404
     if usuario.id == session['usuario_id']:
-        return jsonify({'erro': 'Você não pode excluir a si mesmo'}), 400
+        return jsonify({'erro': 'Voce nao pode excluir a si mesmo'}), 400
+    if admin.empresa and usuario.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(usuario)
     db.session.commit()
-    return jsonify({'mensagem': 'Usuário excluído'}), 200
+    return jsonify({'mensagem': 'Usuario excluido'}), 200
+
+
+# ─────────────────────────────────────────
+# SETORES — lista setores unicos da empresa
+# ─────────────────────────────────────────
+@app.route('/api/setores', methods=['GET'])
+@login_required
+def listar_setores():
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    query   = db.session.query(Usuario.setor).filter(Usuario.setor.isnot(None))
+    if usuario.empresa:
+        query = query.filter(Usuario.empresa == usuario.empresa)
+    setores = sorted(set(row[0] for row in query.all() if row[0]))
+    return jsonify(setores)
 
 
 # ─────────────────────────────────────────
 # TAREFAS
 # ─────────────────────────────────────────
-STATUSES_VALIDOS = [
-    'Não iniciado', 'Iniciado', 'Em andamento',
-    'Pausado', 'Aguardo retorno', 'Finalizado'
-]
-
+STATUSES_VALIDOS   = ['Nao iniciado', 'Iniciado', 'Em andamento', 'Pausado', 'Aguardo retorno', 'Finalizado']
 PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
 
 
@@ -503,19 +582,22 @@ PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
 @login_required
 def listar_tarefas():
     usuario = db.session.get(Usuario, session['usuario_id'])
+    empresa = usuario.empresa
+
     if usuario.tipo_perfil == 'Administrador':
-        tarefas = Tarefa.query.filter(
-            db.or_(
-                Tarefa.compartilhada == True,
-                Tarefa.criado_por == usuario.id
-            )
-        ).order_by(Tarefa.codigo.desc()).all()
+        query = Tarefa.query.filter(
+            db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == usuario.id)
+        )
+        if empresa:
+            query = query.filter(Tarefa.empresa == empresa)
     else:
-        tarefas = (Tarefa.query
-                   .join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)
-                   .filter(tarefa_responsaveis.c.usuario_id == usuario.id)
-                   .order_by(Tarefa.codigo.desc()).all())
-    return jsonify([t.to_dict() for t in tarefas])
+        query = (Tarefa.query
+                 .join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)
+                 .filter(tarefa_responsaveis.c.usuario_id == usuario.id))
+        if empresa:
+            query = query.filter(Tarefa.empresa == empresa)
+
+    return jsonify([t.to_dict() for t in query.order_by(Tarefa.codigo.desc()).all()])
 
 
 @app.route('/api/tarefas', methods=['POST'])
@@ -523,19 +605,23 @@ def listar_tarefas():
 def criar_tarefa():
     dados = request.json
     if not dados.get('descricao'):
-        return jsonify({'erro': 'Descrição obrigatória'}), 400
+        return jsonify({'erro': 'Descricao obrigatoria'}), 400
 
     prioridade    = dados.get('prioridade', 'Nenhuma')
     compartilhada = dados.get('compartilhada', True)
 
     if prioridade not in PRIORIDADES_VALIDAS:
-        return jsonify({'erro': 'Prioridade inválida'}), 400
+        return jsonify({'erro': 'Prioridade invalida'}), 400
+
+    admin   = db.session.get(Usuario, session['usuario_id'])
+    empresa = admin.empresa
 
     nova = Tarefa(
         descricao=dados['descricao'],
         prioridade=prioridade,
         compartilhada=compartilhada,
-        criado_por=session['usuario_id']
+        criado_por=session['usuario_id'],
+        empresa=empresa
     )
     db.session.add(nova)
     db.session.flush()
@@ -545,26 +631,25 @@ def criar_tarefa():
     if compartilhada:
         for uid in dados.get('responsaveis_ids', []):
             u = db.session.get(Usuario, uid)
-            if u and u.tipo_perfil == 'Colaborativo':
+            # Garante que responsavel e da mesma empresa
+            if u and u.tipo_perfil == 'Colaborativo' and (not empresa or u.empresa == empresa):
                 nova.responsaveis.append(u)
                 responsaveis_novos.append(u)
                 nomes.append(u.nome)
 
-    admin = db.session.get(Usuario, session['usuario_id'])
     msg = f'Tarefa criada por {admin.nome}.'
     if not compartilhada:
-        msg += ' Tarefa pessoal (não compartilhada).'
+        msg += ' Tarefa pessoal (nao compartilhada).'
     elif nomes:
-        msg += f' Responsáveis: {", ".join(nomes)}.'
+        msg += f' Responsaveis: {", ".join(nomes)}.'
     else:
-        msg += ' Sem responsáveis.'
+        msg += ' Sem responsaveis.'
 
     registrar_historico(nova.codigo, session['usuario_id'], msg)
     db.session.commit()
 
-    # ── EMAIL: notifica responsáveis atribuídos
-    if responsaveis_novos:
-        email_tarefa_atribuida(nova, responsaveis_novos, admin.nome)
+    # EMAIL: notifica sobre nova tarefa criada
+    email_tarefa_criada(nova, responsaveis_novos, admin.nome, admin.email)
 
     return jsonify(nova.to_dict()), 201
 
@@ -573,13 +658,16 @@ def criar_tarefa():
 @admin_required
 def excluir_tarefa(codigo):
     tarefa = db.session.get(Tarefa, codigo)
+    admin  = db.session.get(Usuario, session['usuario_id'])
     if not tarefa:
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
+    if admin.empresa and tarefa.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
     if not tarefa.compartilhada and tarefa.criado_por != session['usuario_id']:
         return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(tarefa)
     db.session.commit()
-    return jsonify({'mensagem': f'Tarefa #{codigo} excluída'}), 200
+    return jsonify({'mensagem': f'Tarefa #{codigo} excluida'}), 200
 
 
 @app.route('/api/tarefas/<int:codigo>/status', methods=['PATCH'])
@@ -588,13 +676,15 @@ def atualizar_status(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = db.session.get(Usuario, session['usuario_id'])
     if not tarefa:
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
+    if usuario.empresa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in [u.id for u in tarefa.responsaveis]:
         return jsonify({'erro': 'Acesso negado'}), 403
 
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
-        return jsonify({'erro': 'Status inválido'}), 400
+        return jsonify({'erro': 'Status invalido'}), 400
 
     anterior      = tarefa.status
     tarefa.status = novo_status
@@ -602,7 +692,6 @@ def atualizar_status(codigo):
         f'Status alterado de "{anterior}" para "{novo_status}" por {usuario.nome}.')
     db.session.commit()
 
-    # ── EMAIL: notifica responsáveis sobre mudança de status
     if anterior != novo_status:
         email_status_alterado(tarefa, anterior, novo_status, usuario.nome)
 
@@ -613,11 +702,14 @@ def atualizar_status(codigo):
 @admin_required
 def atualizar_prioridade(codigo):
     tarefa = db.session.get(Tarefa, codigo)
+    admin  = db.session.get(Usuario, session['usuario_id'])
     if not tarefa:
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
+    if admin.empresa and tarefa.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
     nova = request.json.get('prioridade')
     if nova not in PRIORIDADES_VALIDAS:
-        return jsonify({'erro': 'Prioridade inválida'}), 400
+        return jsonify({'erro': 'Prioridade invalida'}), 400
     tarefa.prioridade = nova
     db.session.commit()
     return jsonify(tarefa.to_dict()), 200
@@ -627,32 +719,35 @@ def atualizar_prioridade(codigo):
 @admin_required
 def atualizar_responsaveis(codigo):
     tarefa = db.session.get(Tarefa, codigo)
+    admin  = db.session.get(Usuario, session['usuario_id'])
     if not tarefa:
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
+    if admin.empresa and tarefa.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
 
-    admin       = db.session.get(Usuario, session['usuario_id'])
-    ids_antes   = {u.id for u in tarefa.responsaveis}
+    ids_antes = {u.id for u in tarefa.responsaveis}
+    empresa   = admin.empresa
 
     tarefa.responsaveis.clear()
-    nomes_depois        = []
-    responsaveis_novos  = []
+    nomes_depois       = []
+    responsaveis_novos = []
     for uid in request.json.get('responsaveis_ids', []):
         u = db.session.get(Usuario, uid)
-        if u and u.tipo_perfil == 'Colaborativo':
+        if u and u.tipo_perfil == 'Colaborativo' and (not empresa or u.empresa == empresa):
             tarefa.responsaveis.append(u)
             nomes_depois.append(u.nome)
-            # Só notifica quem é NOVO na tarefa
             if u.id not in ids_antes:
                 responsaveis_novos.append(u)
 
-    nomes_antes_str  = ', '.join([db.session.get(Usuario, i).nome for i in ids_antes if db.session.get(Usuario, i)]) or 'nenhum'
+    nomes_antes_str = ', '.join(
+        db.session.get(Usuario, i).nome for i in ids_antes if db.session.get(Usuario, i)
+    ) or 'nenhum'
     registrar_historico(codigo, session['usuario_id'],
-        f'Responsáveis alterados por {admin.nome}. '
+        f'Responsaveis alterados por {admin.nome}. '
         f'Antes: {nomes_antes_str}. '
         f'Agora: {", ".join(nomes_depois) or "nenhum"}.')
     db.session.commit()
 
-    # ── EMAIL: notifica apenas quem foi adicionado agora
     if responsaveis_novos:
         email_tarefa_atribuida(tarefa, responsaveis_novos, admin.nome)
 
@@ -660,13 +755,13 @@ def atualizar_responsaveis(codigo):
 
 
 # ─────────────────────────────────────────
-# COMENTÁRIOS
+# COMENTARIOS
 # ─────────────────────────────────────────
 @app.route('/api/tarefas/<int:codigo>/comentarios', methods=['GET'])
 @login_required
 def listar_comentarios(codigo):
     if not db.session.get(Tarefa, codigo):
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     comentarios = (Comentario.query.filter_by(id_tarefa=codigo)
                    .order_by(Comentario.data_hora.asc()).all())
     return jsonify([c.to_dict() for c in comentarios])
@@ -678,26 +773,27 @@ def adicionar_comentario(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = db.session.get(Usuario, session['usuario_id'])
     if not tarefa:
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
+    if usuario.empresa and tarefa.empresa != usuario.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in [u.id for u in tarefa.responsaveis]:
         return jsonify({'erro': 'Acesso negado'}), 403
 
     texto = request.json.get('texto', '').strip()
     if not texto:
-        return jsonify({'erro': 'Comentário não pode ser vazio'}), 400
+        return jsonify({'erro': 'Comentario nao pode ser vazio'}), 400
 
     novo = Comentario(id_tarefa=codigo, id_usuario=session['usuario_id'], texto=texto, tipo='comentario')
     db.session.add(novo)
     db.session.commit()
 
-    # ── EMAIL: notifica envolvidos sobre o novo comentário
     email_comentario_adicionado(tarefa, texto, usuario.nome, usuario.id)
 
     return jsonify(novo.to_dict()), 201
 
 
 # ─────────────────────────────────────────
-# INICIALIZAÇÃO
+# INICIALIZACAO
 # ─────────────────────────────────────────
 if __name__ == '__main__':
     with app.app_context():
