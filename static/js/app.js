@@ -430,16 +430,19 @@ function renderCard(t, admin) {
             <select class="task-status-select" onchange="alterarStatus(${t.codigo},this.value)" onclick="event.stopPropagation()">
                 ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
-            <button class="btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalChecklist(${t.codigo})" title="Checklist">
-                ✅${t.checklist_total > 0 ? `<span class="badge-anexo" style="background:${t.checklist_concluidos===t.checklist_total&&t.checklist_total>0?'#22c55e':'var(--accent)'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
-            </button>
-            <button class="btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalAnexos(${t.codigo})" title="Arquivos anexos">
-                📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
-            </button>
-            ${podExcluir ? `<button class="btn-danger" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
-                </svg></button>` : ''}
+            <div style="display:flex;gap:5px;align-items:center">
+                <button class="action-btn action-checklist" style="width:28px;height:28px;border-radius:6px" onclick="event.stopPropagation();abrirModalChecklist(${t.codigo})" title="Checklist">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    ${t.checklist_total > 0 ? `<span class="action-badge ${t.checklist_concluidos===t.checklist_total?'green':'blue'}" style="font-size:8px;min-width:13px;height:13px">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
+                </button>
+                <button class="action-btn action-anexos" style="width:28px;height:28px;border-radius:6px" onclick="event.stopPropagation();abrirModalAnexos(${t.codigo})" title="Arquivos">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    ${t.anexos_count > 0 ? `<span class="action-badge blue" style="font-size:8px;min-width:13px;height:13px">${t.anexos_count}</span>` : ''}
+                </button>
+                ${podExcluir ? `<button class="action-btn action-delete" style="width:28px;height:28px;border-radius:6px" onclick="event.stopPropagation();confirmarExcluirTarefa(${t.codigo})" title="Excluir">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                </button>` : ''}
+            </div>
         </div>
         <div class="dblclick-hint">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -473,27 +476,31 @@ function renderLinha(t, admin) {
             </select>
         </td>
         ${admin ? `<td class="td-actions" onclick="event.stopPropagation()">
-            <button class="btn-icon" onclick="abrirModalChecklist(${t.codigo})" title="Checklist">
-                ✅${t.checklist_total > 0 ? `<span class="badge-anexo" style="background:${t.checklist_concluidos===t.checklist_total&&t.checklist_total>0?'#22c55e':'var(--accent)'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
+            <button class="action-btn action-checklist" onclick="abrirModalChecklist(${t.codigo})" title="Checklist">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                ${t.checklist_total > 0 ? `<span class="action-badge ${t.checklist_concluidos===t.checklist_total ? 'green' : 'blue'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
             </button>
-            <button class="btn-icon" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
-                📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
+            <button class="action-btn action-anexos" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                ${t.anexos_count > 0 ? `<span class="action-badge blue">${t.anexos_count}</span>` : ''}
             </button>
-            ${podEditar ? `<button class="btn-icon" onclick="abrirModalResponsaveis(${t.codigo})" title="Responsáveis">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            ${podEditar ? `<button class="action-btn action-resp" onclick="abrirModalResponsaveis(${t.codigo})" title="Responsáveis">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </button>` : ''}
-            ${podExcluir ? `<button class="btn-icon btn-icon-danger" onclick="confirmarExcluirTarefa(${t.codigo})" title="Excluir">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
-                </svg>
+            ${podExcluir ? `<button class="action-btn action-delete" onclick="confirmarExcluirTarefa(${t.codigo})" title="Excluir">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
             </button>` : ''}
-        </td>` : `<td onclick="event.stopPropagation()">
-            <button class="btn-icon" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
-                📎${t.anexos_count > 0 ? `<span class="badge-anexo">${t.anexos_count}</span>` : ''}
+        </td>` : `<td class="td-actions" onclick="event.stopPropagation()">
+            <button class="action-btn action-checklist" onclick="abrirModalChecklist(${t.codigo})" title="Checklist">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                ${t.checklist_total > 0 ? `<span class="action-badge ${t.checklist_concluidos===t.checklist_total ? 'green' : 'blue'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
+            </button>
+            <button class="action-btn action-anexos" onclick="abrirModalAnexos(${t.codigo})" title="Arquivos">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                ${t.anexos_count > 0 ? `<span class="action-badge blue">${t.anexos_count}</span>` : ''}
             </button>
         </td>`}
-    </tr>`;
-}
+    </tr>`;\n}
 
 function badgePrioridade(p) {
     if (p !== 'Alta') return '';

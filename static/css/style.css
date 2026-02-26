@@ -1024,7 +1024,7 @@ body {
 .td-date { width: 130px; color: var(--text-muted); font-size: 13px; }
 .td-prio { width: 100px; }
 .td-status { width: 170px; }
-.td-actions { width: 80px; }
+.td-actions { width: 160px; }
 
 .table-desc {
     display: -webkit-box;
@@ -1051,11 +1051,103 @@ body {
     margin-right: 2px;
 }
 
+/* ─── COLUNA DE AÇÕES REDESENHADA ─── */
 .td-actions {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
+    flex-wrap: nowrap;
+    padding: 0 4px;
 }
+
+/* Botão de ação base */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    background: var(--surface2);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    position: relative;
+    flex-shrink: 0;
+    font-size: 15px;
+    line-height: 1;
+}
+.action-btn:hover { transform: translateY(-1px); }
+
+/* Checklist — verde */
+.action-btn.action-checklist {
+    color: #22c55e;
+    border-color: rgba(34,197,94,0.25);
+    background: rgba(34,197,94,0.08);
+}
+.action-btn.action-checklist:hover {
+    background: rgba(34,197,94,0.18);
+    border-color: #22c55e;
+    box-shadow: 0 2px 8px rgba(34,197,94,0.2);
+}
+
+/* Anexos — azul */
+.action-btn.action-anexos {
+    color: #60a5fa;
+    border-color: rgba(96,165,250,0.25);
+    background: rgba(96,165,250,0.08);
+}
+.action-btn.action-anexos:hover {
+    background: rgba(96,165,250,0.18);
+    border-color: #60a5fa;
+    box-shadow: 0 2px 8px rgba(96,165,250,0.2);
+}
+
+/* Responsáveis — roxo */
+.action-btn.action-resp {
+    color: #a78bfa;
+    border-color: rgba(167,139,250,0.25);
+    background: rgba(167,139,250,0.08);
+}
+.action-btn.action-resp:hover {
+    background: rgba(167,139,250,0.18);
+    border-color: #a78bfa;
+    box-shadow: 0 2px 8px rgba(167,139,250,0.2);
+}
+
+/* Excluir — vermelho */
+.action-btn.action-delete {
+    color: #f87171;
+    border-color: rgba(248,113,113,0.25);
+    background: rgba(248,113,113,0.08);
+}
+.action-btn.action-delete:hover {
+    background: rgba(248,113,113,0.18);
+    border-color: #f87171;
+    box-shadow: 0 2px 8px rgba(248,113,113,0.2);
+}
+
+/* Badge contador dentro do botão de ação */
+.action-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #3b82f6;
+    color: #fff;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--bg);
+    line-height: 1;
+}
+.action-badge.green  { background: #22c55e; }
+.action-badge.blue   { background: #3b82f6; }
 
 .btn-icon-danger {
     color: var(--red) !important;
