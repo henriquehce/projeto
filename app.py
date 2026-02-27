@@ -1063,7 +1063,11 @@ def upload_anexo(codigo):
 
     nome_original = arquivo.filename
     ext           = nome_original.rsplit('.', 1)[1].lower() if '.' in nome_original else ''
-    nome_uuid     = f'{uuid.uuid4().hex}.{ext}' if ext else uuid.uuid4().hex
+    # Nome no storage: nome-original_uuid-curto.ext  ex: relatorio-vendas_b90421d0.pdf
+    nome_base = nome_original.rsplit('.', 1)[0] if '.' in nome_original else nome_original
+    nome_base = re.sub(r'[^\w\-]', '_', nome_base)[:40]  # sanitiza, máx 40 chars
+    uid_curto = uuid.uuid4().hex[:8]
+    nome_uuid = f'{nome_base}_{uid_curto}.{ext}' if ext else f'{nome_base}_{uid_curto}'
     mime_type     = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
     file_bytes    = arquivo.read()
     tamanho       = len(file_bytes)
