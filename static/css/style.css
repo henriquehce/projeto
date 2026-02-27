@@ -10,6 +10,7 @@
     --border:    #1e2d47;
     --border2:   #243450;
     --text:      #e2e8f0;
+    --text-base: #e2e8f0;
     --text-muted:#6b7fa8;
     --text-dim:  #3d5070;
     --accent:    #3b82f6;
@@ -25,6 +26,100 @@
     --shadow:    0 8px 32px rgba(0,0,0,0.4);
     --trans:     0.18s ease;
 }
+
+/* ── LIGHT MODE ── */
+body.light-mode {
+    --bg:        #f0f4f8;
+    --surface:   #ffffff;
+    --surface2:  #e8edf5;
+    --border:    #d0d9e8;
+    --border2:   #b8c5d9;
+    --text:      #1a2235;
+    --text-base: #1a2235;
+    --text-muted:#5a6a85;
+    --text-dim:  #8a9ab5;
+    --accent:    #2563eb;
+    --accent-h:  #1d4ed8;
+    --accent-glow: rgba(37,99,235,0.2);
+    --shadow:    0 4px 20px rgba(0,0,0,0.1);
+}
+
+body.light-mode .app-header {
+    background: rgba(255,255,255,0.92);
+    border-bottom: 1px solid var(--border);
+}
+body.light-mode .sidebar {
+    background: #ffffff;
+}
+body.light-mode .task-card {
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+body.light-mode .task-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+body.light-mode .modal-box {
+    background: #ffffff;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+}
+body.light-mode .tasks-table thead tr {
+    background: #f0f4f8;
+}
+body.light-mode .task-row:hover td {
+    background: #f8fafc;
+}
+body.light-mode .field-input,
+body.light-mode .field-select,
+body.light-mode .task-status-select {
+    background: #f8fafc;
+    color: var(--text);
+    border-color: var(--border);
+}
+body.light-mode .field-select option,
+body.light-mode .task-status-select option {
+    background: #ffffff;
+    color: #1a2235;
+}
+body.light-mode .screen-login-inner {
+    background: #ffffff;
+}
+body.light-mode .perfil-badge.master { background: rgba(124,58,237,0.12); color: #7c3aed; }
+body.light-mode .perfil-badge.admin  { background: rgba(244,63,94,0.12);  color: #e11d48; }
+body.light-mode .perfil-badge.colab  { background: rgba(16,185,129,0.12); color: #059669; }
+body.light-mode .comment-item { background: #f8fafc; }
+body.light-mode .historico-item { background: #f0f4f8; }
+body.light-mode .usuario-card  { background: #f8fafc; }
+body.light-mode .relatorio-pessoa { background: #ffffff; }
+body.light-mode .relatorio-pessoa-header { background: #f0f4f8; }
+body.light-mode .relatorio-table th { background: #f8fafc; }
+
+/* Suave transição ao trocar tema */
+body, body * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Botão tema */
+.btn-theme {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+.btn-theme:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
+}
+
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

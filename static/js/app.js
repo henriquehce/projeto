@@ -742,8 +742,31 @@ async function enviarComentario() {
 }
 
 // ─────────────────────────────────────────
-// SETORES PRÉ-DEFINIDOS
+// TEMA (DARK / LIGHT)
 // ─────────────────────────────────────────
+function toggleTema() {
+    const isLight = document.body.classList.toggle('light-mode');
+    localStorage.setItem('taskflow-tema', isLight ? 'light' : 'dark');
+    atualizarIconeTema(isLight);
+}
+
+function atualizarIconeTema(isLight) {
+    document.getElementById('theme-icon-moon').style.display = isLight ? 'none'  : 'block';
+    document.getElementById('theme-icon-sun').style.display  = isLight ? 'block' : 'none';
+    document.getElementById('theme-label').textContent       = isLight ? 'Escuro' : 'Claro';
+}
+
+// Restaura tema salvo ao carregar
+(function() {
+    const tema = localStorage.getItem('taskflow-tema');
+    if (tema === 'light') {
+        document.body.classList.add('light-mode');
+        // Ícone será atualizado depois que o DOM carregar
+        document.addEventListener('DOMContentLoaded', () => atualizarIconeTema(true));
+    }
+})();
+
+
 const SETORES_PREDEFINIDOS = [
     'TI', 'QA', 'Direção', 'Marketing', 'Comercial / Vendas',
     'RH', 'Financeiro', 'Contabilidade', 'Jurídico', 'Logística',

@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, request, render_template, session, send_from_directory
+from flask import Flask, jsonify, request, render_template, session, redirect
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import urllib.request
+import urllib.parse
 import json as _json
 from datetime import datetime
 from functools import wraps
@@ -40,11 +41,11 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Upload config
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB max
+# Upload config — Supabase Storage
+SUPABASE_URL    = os.environ.get('SUPABASE_URL', '')        # ex: https://xxxx.supabase.co
+SUPABASE_KEY    = os.environ.get('SUPABASE_SERVICE_KEY', '') # service_role key (não a anon)
+SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET', 'anexos-taskflow')
+app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB
 
 EXTENSOES_PERMITIDAS = {
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -237,6 +238,8 @@ class Anexo(db.Model):
     uploader     = db.relationship('Usuario', foreign_keys=[id_usuario])
 
     def to_dict(self):
+        # url_download: se tiver URL do Supabase usa ela direto, senão usa rota local (legado)
+        url = self.nome_arquivo if self.nome_arquivo.startswith('http') else f'/api/anexos/{self.id}/download'
         return {
             'id':            self.id,
             'nome_original': self.nome_original,
@@ -244,7 +247,7 @@ class Anexo(db.Model):
             'mime_type':     self.mime_type or '',
             'data_upload':   self.data_upload.strftime('%d/%m/%Y %H:%M'),
             'uploader_nome': self.uploader.nome if self.uploader else 'Desconhecido',
-            'url_download':  f'/api/anexos/{self.id}/download'
+            'url_download':  url
         }
 
 
@@ -990,6 +993,43 @@ def formatar_tamanho(b):
     if b < 1024**2: return f'{b/1024:.1f} KB'
     return f'{b/1024**2:.1f} MB'
 
+def supabase_upload(file_bytes, nome_arquivo, mime_type):
+    """Faz upload para o Supabase Storage e retorna (sucesso, url_publica)."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return False, 'Supabase não configurado'
+    url = f'{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{nome_arquivo}'
+    req = urllib.request.Request(
+        url, data=file_bytes,
+        headers={
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type': mime_type,
+            'x-upsert': 'true'
+        },
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            url_publica = f'{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{nome_arquivo}'
+            return True, url_publica
+    except Exception as e:
+        return False, str(e)
+
+def supabase_delete(nome_arquivo):
+    """Remove arquivo do Supabase Storage."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return
+    url = f'{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{nome_arquivo}'
+    req = urllib.request.Request(
+        url, headers={'Authorization': f'Bearer {SUPABASE_KEY}'}, method='DELETE'
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f'[STORAGE] Erro ao deletar {nome_arquivo}: {e}')
+
+def supabase_url_publica(nome_arquivo):
+    return f'{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{nome_arquivo}'
+
 
 @app.route('/api/tarefas/<int:codigo>/anexos', methods=['GET'])
 @login_required
@@ -1021,22 +1061,27 @@ def upload_anexo(codigo):
     if not extensao_permitida(arquivo.filename):
         return jsonify({'erro': 'Tipo de arquivo não permitido'}), 400
 
-    nome_original = secure_filename(arquivo.filename)
+    nome_original = arquivo.filename
     ext           = nome_original.rsplit('.', 1)[1].lower() if '.' in nome_original else ''
     nome_uuid     = f'{uuid.uuid4().hex}.{ext}' if ext else uuid.uuid4().hex
-    caminho       = os.path.join(app.config['UPLOAD_FOLDER'], nome_uuid)
-    arquivo.save(caminho)
-    tamanho   = os.path.getsize(caminho)
-    mime_type = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
+    mime_type     = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
+    file_bytes    = arquivo.read()
+    tamanho       = len(file_bytes)
 
+    # Upload para Supabase Storage
+    ok, resultado = supabase_upload(file_bytes, nome_uuid, mime_type)
+    if not ok:
+        return jsonify({'erro': f'Erro no upload: {resultado}'}), 500
+
+    # Salva a URL pública no banco (campo nome_arquivo)
     novo = Anexo(
         id_tarefa=codigo, id_usuario=session['usuario_id'],
-        nome_original=arquivo.filename, nome_arquivo=nome_uuid,
+        nome_original=nome_original, nome_arquivo=resultado,  # URL pública
         tamanho=tamanho, mime_type=mime_type
     )
     db.session.add(novo)
     registrar_historico(codigo, session['usuario_id'],
-        f'{usuario.nome} anexou o arquivo "{arquivo.filename}" ({formatar_tamanho(tamanho)}).')
+        f'{usuario.nome} anexou o arquivo "{nome_original}" ({formatar_tamanho(tamanho)}).')
     db.session.commit()
     return jsonify(novo.to_dict()), 201
 
@@ -1044,6 +1089,7 @@ def upload_anexo(codigo):
 @app.route('/api/anexos/<int:aid>/download', methods=['GET'])
 @login_required
 def download_anexo(aid):
+    """Rota legado — redireciona para URL pública do Supabase."""
     anexo   = db.session.get(Anexo, aid)
     usuario = db.session.get(Usuario, session['usuario_id'])
     if not anexo:
@@ -1051,13 +1097,10 @@ def download_anexo(aid):
     tarefa = db.session.get(Tarefa, anexo.id_tarefa)
     if usuario.empresa and tarefa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    caminho = os.path.join(app.config['UPLOAD_FOLDER'], anexo.nome_arquivo)
-    if not os.path.exists(caminho):
-        return jsonify({'erro': 'Arquivo não encontrado no servidor'}), 404
-    return send_from_directory(
-        app.config['UPLOAD_FOLDER'], anexo.nome_arquivo,
-        download_name=anexo.nome_original, as_attachment=True
-    )
+    # Se nome_arquivo for URL do Supabase, redireciona
+    if anexo.nome_arquivo.startswith('http'):
+        return redirect(anexo.nome_arquivo)
+    return jsonify({'erro': 'Arquivo não disponível'}), 404
 
 
 @app.route('/api/anexos/<int:aid>', methods=['DELETE'])
@@ -1067,7 +1110,6 @@ def excluir_anexo(aid):
     usuario = db.session.get(Usuario, session['usuario_id'])
     if not anexo:
         return jsonify({'erro': 'Anexo não encontrado'}), 404
-    # Só o uploader, o criador da tarefa ou admin master pode excluir
     tarefa = db.session.get(Tarefa, anexo.id_tarefa)
     pode = (
         anexo.id_usuario == usuario.id or
@@ -1076,9 +1118,10 @@ def excluir_anexo(aid):
     )
     if not pode:
         return jsonify({'erro': 'Acesso negado'}), 403
-    caminho = os.path.join(app.config['UPLOAD_FOLDER'], anexo.nome_arquivo)
-    if os.path.exists(caminho):
-        os.remove(caminho)
+    # Remove do Supabase Storage
+    if anexo.nome_arquivo.startswith('http'):
+        nome_arq = anexo.nome_arquivo.split(f'/{SUPABASE_BUCKET}/')[-1]
+        supabase_delete(nome_arq)
     registrar_historico(anexo.id_tarefa, session['usuario_id'],
         f'{usuario.nome} removeu o anexo "{anexo.nome_original}".')
     db.session.delete(anexo)
