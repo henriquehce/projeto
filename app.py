@@ -150,7 +150,7 @@ class Tarefa(db.Model):
     data_criacao   = db.Column(db.DateTime, default=datetime.utcnow)
     status         = db.Column(db.String(30), default='Nao iniciado')
     prioridade     = db.Column(db.String(10), default='Nenhuma')
-    compartilhada  = db.Column(db.Boolean, default=False)
+    compartilhada  = db.Column(db.Boolean, default=True)
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     empresa        = db.Column(db.String(150), nullable=True)
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
@@ -754,32 +754,26 @@ def criar_tarefa():
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descricao obrigatoria'}), 400
 
-    prioridade = dados.get('prioridade', 'Nenhuma')
-
+    prioridade    = dados.get('prioridade', 'Nenhuma')
+    compartilhada = dados.get('compartilhada', True)
     if prioridade not in PRIORIDADES_VALIDAS:
         return jsonify({'erro': 'Prioridade invalida'}), 400
 
     admin   = db.session.get(Usuario, session['usuario_id'])
     empresa = admin.empresa
 
-    responsaveis_ids = dados.get('responsaveis_ids', [])
-    compartilhada = len(responsaveis_ids) > 0
-
     nova = Tarefa(
-    descricao=dados['descricao'],
-    prioridade=prioridade,
-    compartilhada=compartilhada,
-    criado_por=session['usuario_id'],
-    empresa=empresa
+        descricao=dados['descricao'], prioridade=prioridade,
+        compartilhada=compartilhada, criado_por=session['usuario_id'], empresa=empresa
     )
-    
     db.session.add(nova)
     db.session.flush()
 
     # Responsaveis colaborativos
     responsaveis_novos = []
     nomes = []
-    for uid in responsaveis_ids:
+    if compartilhada:
+        for uid in dados.get('responsaveis_ids', []):
             u = db.session.get(Usuario, uid)
             if u and u.tipo_perfil == 'Colaborativo' and (not empresa or u.empresa == empresa):
                 nova.responsaveis.append(u)
@@ -795,8 +789,10 @@ def criar_tarefa():
     msg = f'Tarefa criada por {admin.nome}.'
     if not compartilhada:
         msg += ' Tarefa pessoal.'
-    else:
+    elif nomes:
         msg += f' Responsaveis: {", ".join(nomes)}.'
+    else:
+        msg += ' Sem responsaveis.'
 
     registrar_historico(nova.codigo, session['usuario_id'], msg)
     db.session.commit()
