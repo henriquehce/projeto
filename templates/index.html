@@ -208,18 +208,8 @@
                 <option value="Alta">↑ Alta</option>
             </select>
 
-            <label class="field-label">Tipo de tarefa</label>
-            <label class="toggle-wrap on" id="toggle-compartilhada-wrap" onclick="handleToggleCompartilhada()">
-                <input type="checkbox" id="nova-tarefa-shared" checked>
-                <div class="toggle-track"></div>
-                <div>
-                    <p class="toggle-label">Tarefa compartilhada</p>
-                    <p class="toggle-sublabel" id="toggle-sublabel">Visível para outros usuários e responsáveis</p>
-                </div>
-            </label>
-
             <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px">
-                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional)</span></label>
+                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional — se não informar, a tarefa fica pessoal)</span></label>
                 <div id="responsaveis-criar" class="resp-selector"></div>
                 <label class="field-label" style="margin-top:8px">Admins colaboradores <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
                 <div id="admins-criar" class="resp-selector"></div>
@@ -455,16 +445,6 @@
 
 <script src="/static/js/app.js"></script>
 <script>
-function handleToggleCompartilhada() {
-    const cb   = document.getElementById('nova-tarefa-shared');
-    const wrap = document.getElementById('toggle-compartilhada-wrap');
-    const sub  = document.getElementById('toggle-sublabel');
-    cb.checked = !cb.checked;
-    wrap.classList.toggle('on', cb.checked);
-    sub.textContent = cb.checked ? 'Visível para outros usuários e responsáveis' : 'Somente você terá acesso a esta tarefa';
-    toggleCompartilhada(cb.checked);
-}
-
 function calcularForca(senha) {
     const regras = { tamanho: senha.length >= 8, maiuscula: /[A-Z]/.test(senha), minuscula: /[a-z]/.test(senha), numero: /\d/.test(senha), especial: /[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha) };
     return { regras, score: Object.values(regras).filter(Boolean).length };
