@@ -4,7 +4,7 @@ from flask_cors import CORS
 import urllib.request
 import urllib.parse
 import json as _json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 import bcrypt
 import re
@@ -13,6 +13,13 @@ import threading
 import uuid
 import mimetypes
 from werkzeug.utils import secure_filename
+
+# Fuso horário Brasil (UTC-3)
+BR_TZ = timezone(timedelta(hours=-3))
+
+def agora_br():
+    """Retorna datetime atual no fuso horário do Brasil."""
+    return datetime.now(BR_TZ).replace(tzinfo=None)
 
 try:
     from dotenv import load_dotenv
@@ -46,6 +53,9 @@ SUPABASE_URL    = os.environ.get('SUPABASE_URL', '')        # ex: https://xxxx.s
 SUPABASE_KEY    = os.environ.get('SUPABASE_SERVICE_KEY', '') # service_role key (não a anon)
 SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET', 'anexos-taskflow')
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB
+
+# URL pública do sistema — usada nos links dos emails
+APP_URL = os.environ.get('APP_URL', 'https://projeto-zvam.onrender.com')
 
 EXTENSOES_PERMITIDAS = {
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -147,7 +157,7 @@ class Tarefa(db.Model):
     __tablename__ = 'tarefas'
     codigo         = db.Column(db.Integer, primary_key=True, autoincrement=True)
     descricao      = db.Column(db.Text, nullable=False)
-    data_criacao   = db.Column(db.DateTime, default=datetime.utcnow)
+    data_criacao   = db.Column(db.DateTime, default=agora_br)
     status         = db.Column(db.String(30), default='Nao iniciado')
     prioridade     = db.Column(db.String(10), default='Nenhuma')
     compartilhada  = db.Column(db.Boolean, default=True)
@@ -212,7 +222,7 @@ class Comentario(db.Model):
     id_usuario = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     texto      = db.Column(db.Text, nullable=False)
     tipo       = db.Column(db.String(20), default='comentario')
-    data_hora  = db.Column(db.DateTime, default=datetime.utcnow)
+    data_hora  = db.Column(db.DateTime, default=agora_br)
 
     def to_dict(self):
         return {
@@ -234,7 +244,7 @@ class Anexo(db.Model):
     nome_arquivo = db.Column(db.String(255), nullable=False)  # UUID filename on disk
     tamanho      = db.Column(db.Integer, nullable=False)      # bytes
     mime_type    = db.Column(db.String(100), nullable=True)
-    data_upload  = db.Column(db.DateTime, default=datetime.utcnow)
+    data_upload  = db.Column(db.DateTime, default=agora_br)
     uploader     = db.relationship('Usuario', foreign_keys=[id_usuario])
 
     def to_dict(self):
@@ -262,7 +272,7 @@ class ChecklistItem(db.Model):
     concluido_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     concluido_em  = db.Column(db.DateTime, nullable=True)
     criado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    criado_em    = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em    = db.Column(db.DateTime, default=agora_br)
     autor        = db.relationship('Usuario', foreign_keys=[criado_por])
     executor     = db.relationship('Usuario', foreign_keys=[concluido_por])
 
@@ -286,12 +296,18 @@ def _enviar_async(destinatarios, assunto, corpo_html):
     api_key = os.environ.get('BREVO_API_KEY')
     if not api_key:
         return
-    payload = _json.dumps({
+    body = {
         'sender':      {'name': 'TaskFlow', 'email': os.environ.get('EMAIL_REMETENTE', 'noreply@taskflow.app')},
         'to':          [{'email': e} for e in destinatarios],
         'subject':     assunto,
         'htmlContent': corpo_html
-    }).encode('utf-8')
+    }
+    # CC opcional — adicione EMAIL_CC=email1@x.com,email2@y.com no .env ou Render
+    email_cc = os.environ.get('EMAIL_CC', '')
+    if email_cc:
+        body['cc'] = [{'email': e.strip()} for e in email_cc.split(',') if e.strip()]
+
+    payload = _json.dumps(body).encode('utf-8')
     req = urllib.request.Request(
         'https://api.brevo.com/v3/smtp/email',
         data=payload,
@@ -324,8 +340,13 @@ def _template_base(titulo, conteudo):
         <div style="background: #ffffff; padding: 32px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #0f172a; margin-top: 0;">{titulo}</h2>
             {conteudo}
+            <div style="text-align: center; margin: 28px 0 8px;">
+                <a href="{APP_URL}" style="display:inline-block;background:#3b82f6;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;font-size:15px;">
+                    👉 Clique aqui e veja sua tarefa
+                </a>
+            </div>
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Email automatico do TaskFlow. Nao responda.</p>
+            <p style="color: #94a3b8; font-size: 12px; margin: 0; text-align:center;">Email automatico do TaskFlow. Nao responda.</p>
         </div>
     </div>"""
 
@@ -1235,7 +1256,7 @@ def relatorio_pendencias():
         item['total'] = len(item['tarefas'])
 
     return jsonify({
-        'gerado_em': datetime.utcnow().strftime('%d/%m/%Y %H:%M'),
+        'gerado_em': agora_br().strftime('%d/%m/%Y %H:%M'),
         'total_tarefas': len(tarefas_pendentes),
         'por_usuario': resultado
     })
@@ -1333,7 +1354,7 @@ def marcar_item_checklist(item_id):
     item.concluido     = concluido
     item.observacao    = observacao if concluido else None
     item.concluido_por = session['usuario_id'] if concluido else None
-    item.concluido_em  = datetime.utcnow() if concluido else None
+    item.concluido_em  = agora_br() if concluido else None
     db.session.commit()
     return jsonify(item.to_dict()), 200
 

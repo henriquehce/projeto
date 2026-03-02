@@ -449,6 +449,9 @@ function renderCard(t, admin) {
                 ${STATUSES.map(s => `<option ${t.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
             <div style="display:flex;gap:5px;align-items:center">
+                <button class="action-btn action-comentar" style="width:28px;height:28px;border-radius:6px" onclick="event.stopPropagation();abrirModalComentarios(${t.codigo})" title="Comentários">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </button>
                 <button class="action-btn action-checklist" style="width:28px;height:28px;border-radius:6px" onclick="event.stopPropagation();abrirModalChecklist(${t.codigo})" title="Checklist">
                     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                     ${t.checklist_total > 0 ? `<span class="action-badge ${t.checklist_concluidos===t.checklist_total?'green':'blue'}" style="font-size:8px;min-width:13px;height:13px">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
@@ -461,10 +464,6 @@ function renderCard(t, admin) {
                     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                 </button>` : ''}
             </div>
-        </div>
-        <div class="dblclick-hint">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Clique 2x para comentar
         </div>
     </div>`;
 }
@@ -494,6 +493,9 @@ function renderLinha(t, admin) {
             </select>
         </td>
         ${admin ? `<td class="td-actions" onclick="event.stopPropagation()">
+            <button class="action-btn action-comentar" onclick="abrirModalComentarios(${t.codigo})" title="Comentários">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
             <button class="action-btn action-checklist" onclick="abrirModalChecklist(${t.codigo})" title="Checklist">
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 ${t.checklist_total > 0 ? `<span class="action-badge ${t.checklist_concluidos===t.checklist_total ? 'green' : 'blue'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
@@ -509,6 +511,9 @@ function renderLinha(t, admin) {
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
             </button>` : ''}
         </td>` : `<td class="td-actions" onclick="event.stopPropagation()">
+            <button class="action-btn action-comentar" onclick="abrirModalComentarios(${t.codigo})" title="Comentários">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
             <button class="action-btn action-checklist" onclick="abrirModalChecklist(${t.codigo})" title="Checklist">
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 ${t.checklist_total > 0 ? `<span class="action-badge ${t.checklist_concluidos===t.checklist_total ? 'green' : 'blue'}">${t.checklist_concluidos}/${t.checklist_total}</span>` : ''}
