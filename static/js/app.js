@@ -510,7 +510,7 @@ function badgePrioridade(p) {
 
 function badgesPerspectiva(t) {
     let html = '';
-    if (t.delegada) html += `<span class="badge-perspectiva badge-delegada" title="Tarefa que você criou e delegou">↑ Delegada</span>`;
+    if (t.delegada && t.compartilhada && t.responsaveis && t.responsaveis.length > 0) html += `<span class="badge-perspectiva badge-delegada" title="Tarefa que você criou e delegou">↑ Delegada</span>`;
     if (t.comigo)   html += `<span class="badge-perspectiva badge-comigo"   title="Tarefa atribuída a você para executar">↓ Comigo</span>`;
     return html;
 }
@@ -597,25 +597,20 @@ async function abrirModalNovaTarefa() {
     if (resColabs.ok) responsaveisDisponiveis = await resColabs.json();
     if (resAdmins.ok) adminsDisponiveis       = await resAdmins.json();
 
-    document.getElementById('nova-tarefa-desc').value     = '';
-    document.getElementById('nova-tarefa-prio').value     = 'Nenhuma';
-    document.getElementById('nova-tarefa-shared').checked = true;
-    toggleCompartilhada(true);
+    document.getElementById('nova-tarefa-desc').value = '';
+    document.getElementById('nova-tarefa-prio').value = 'Nenhuma';
     renderSeletorResponsaveis('responsaveis-criar', []);
     renderSeletorAdmins('admins-criar', []);
     abrirModal('modal-nova-tarefa');
 }
 
-function toggleCompartilhada(compartilhada) {
-    document.getElementById('secao-responsaveis').style.display = compartilhada ? 'flex' : 'none';
-}
-
 async function criarTarefa() {
     const descricao        = document.getElementById('nova-tarefa-desc').value.trim();
     const prioridade       = document.getElementById('nova-tarefa-prio').value;
-    const compartilhada    = document.getElementById('nova-tarefa-shared').checked;
-    const responsaveis_ids = compartilhada ? getResponsaveisSelecionados('responsaveis-criar') : [];
+    const responsaveis_ids = getResponsaveisSelecionados('responsaveis-criar');
     const admins_ids       = getResponsaveisSelecionados('admins-criar');
+    // Compartilhada automaticamente se tiver responsáveis ou admins colaboradores
+    const compartilhada    = responsaveis_ids.length > 0 || admins_ids.length > 0;
 
     if (!descricao) { toast('Informe uma descrição', 'error'); return; }
 

@@ -173,9 +173,9 @@ class Tarefa(db.Model):
         delegada = False
         comigo   = False
         if viewer_id is not None:
-            resp_ids       = [u.id for u in self.responsaveis]
+            resp_ids        = [u.id for u in self.responsaveis]
             admin_colab_ids = [u.id for u in self.admins_colabs]
-            if self.criado_por == viewer_id:
+            if self.criado_por == viewer_id and self.compartilhada and resp_ids:
                 delegada = True
             if viewer_id in resp_ids or viewer_id in admin_colab_ids:
                 comigo = True
@@ -769,7 +769,7 @@ def criar_tarefa():
     db.session.add(nova)
     db.session.flush()
 
-    # Responsaveis colaborativos: apenas do mesmo setor ou sem setor, e que sejam da mesma empresa (se for empresa)
+    # Responsaveis colaborativos
     responsaveis_novos = []
     nomes = []
     if compartilhada:
