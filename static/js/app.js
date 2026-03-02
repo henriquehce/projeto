@@ -813,16 +813,18 @@ async function carregarUsuarios() {
         const podExcluir = u.id !== usuarioLogado.id && (isMaster() || (!master && !admin));
         return `
         <div class="usuario-card">
-            <div class="usuario-info">
-                <div class="usuario-avatar">${iniciais(u.nome)}</div>
-                <div>
-                    <p class="usuario-nome">${escapar(u.nome)}</p>
-                    <p class="usuario-email">${escapar(u.email)}</p>
-                    <p class="usuario-funcao">${escapar(u.funcao)}${u.setor ? ' · ' + escapar(u.setor) : ''}</p>
+            <div class="usuario-card-top">
+                <div class="usuario-info">
+                    <div class="usuario-avatar">${iniciais(u.nome)}</div>
+                    <div class="usuario-textos">
+                        <p class="usuario-nome">${escapar(u.nome)}</p>
+                        <p class="usuario-email">${escapar(u.email)}</p>
+                        <p class="usuario-funcao">${escapar(u.funcao)}${u.setor ? ' · ' + escapar(u.setor) : ''}</p>
+                    </div>
                 </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
                 <span class="perfil-badge ${badgeClass}">${u.tipo_perfil}</span>
+            </div>
+            <div class="usuario-acoes">
                 ${u.trocar_senha ? '<span class="badge-senha">🔑 Troca pendente</span>' : ''}
                 <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -836,11 +838,12 @@ async function carregarUsuarios() {
                     </svg> Editar
                 </button>` : ''}
                 ${podExcluir
-                    ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
+                    ? `<button class="btn-ghost btn-sm btn-excluir-usuario" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
-                        </svg></button>`
-                    : '<span style="font-size:12px;color:var(--text-dim)">Você</span>'}
+                        </svg> Excluir
+                    </button>`
+                    : '<span class="usuario-voce">Você</span>'}
             </div>
         </div>`;
     }).join('');
