@@ -208,15 +208,20 @@
                 <option value="Alta">↑ Alta</option>
             </select>
 
-            <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
-                <label class="field-label">
-                    Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional)</span>
-                </label>
-                <div id="responsaveis-criar" class="resp-selector"></div>
+            <label class="field-label">Tipo de tarefa</label>
+            <label class="toggle-wrap on" id="toggle-compartilhada-wrap" onclick="handleToggleCompartilhada()">
+                <input type="checkbox" id="nova-tarefa-shared" checked>
+                <div class="toggle-track"></div>
+                <div>
+                    <p class="toggle-label">Tarefa compartilhada</p>
+                    <p class="toggle-sublabel" id="toggle-sublabel">Visível para outros usuários e responsáveis</p>
+                </div>
+            </label>
 
-                <label class="field-label" style="margin-top:8px">
-                    Admins colaboradores <span style="color:var(--text-dim);font-weight:400">(opcional)</span>
-                </label>
+            <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px">
+                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional)</span></label>
+                <div id="responsaveis-criar" class="resp-selector"></div>
+                <label class="field-label" style="margin-top:8px">Admins colaboradores <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
                 <div id="admins-criar" class="resp-selector"></div>
             </div>
         </div>

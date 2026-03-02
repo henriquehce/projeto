@@ -168,19 +168,16 @@ class Tarefa(db.Model):
                                      foreign_keys='ChecklistItem.id_tarefa',
                                      order_by='ChecklistItem.ordem')
 
-def to_dict(self, viewer_id=None):
+    def to_dict(self, viewer_id=None):
+        # Calcula badges de perspectiva do viewer
         delegada = False
         comigo   = False
         if viewer_id is not None:
-            resp_ids = [u.id for u in self.responsaveis]
+            resp_ids       = [u.id for u in self.responsaveis]
             admin_colab_ids = [u.id for u in self.admins_colabs]
-            
-            # LÓGICA AJUSTADA: 
-            # Só é "delegada" se eu criei E ela for compartilhada com outros.
-            if self.criado_por == viewer_id and self.compartilhada:
+            if self.criado_por == viewer_id:
                 delegada = True
-                
-            if viewer_id in resp_ids or viewer_id in admin_colab_ids or (self.criado_por == viewer_id and not self.compartilhada):
+            if viewer_id in resp_ids or viewer_id in admin_colab_ids:
                 comigo = True
 
         return {
@@ -757,28 +754,18 @@ def criar_tarefa():
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descricao obrigatoria'}), 400
 
-    prioridade = dados.get('prioridade', 'Nenhuma')
+    prioridade    = dados.get('prioridade', 'Nenhuma')
+    compartilhada = dados.get('compartilhada', True)
     if prioridade not in PRIORIDADES_VALIDAS:
         return jsonify({'erro': 'Prioridade invalida'}), 400
-
-    # LÓGICA NOVA: Define se é compartilhada baseado na presença de IDs
-    responsaveis_ids = dados.get('responsaveis_ids', [])
-    admins_ids = dados.get('admins_ids', [])
-    
-    # Se houver qualquer responsável ou admin convidado, ela é compartilhada
-    eh_compartilhada = True if (responsaveis_ids or admins_ids) else False
 
     admin   = db.session.get(Usuario, session['usuario_id'])
     empresa = admin.empresa
 
     nova = Tarefa(
-        descricao=dados['descricao'], 
-        prioridade=prioridade,
-        compartilhada=eh_compartilhada, # Atribuído automaticamente
-        criado_por=session['usuario_id'], 
-        empresa=empresa
+        descricao=dados['descricao'], prioridade=prioridade,
+        compartilhada=compartilhada, criado_por=session['usuario_id'], empresa=empresa
     )
-    
     db.session.add(nova)
     db.session.flush()
 

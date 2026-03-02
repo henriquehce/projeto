@@ -599,8 +599,8 @@ async function abrirModalNovaTarefa() {
 
     document.getElementById('nova-tarefa-desc').value     = '';
     document.getElementById('nova-tarefa-prio').value     = 'Nenhuma';
-   // document.getElementById('nova-tarefa-shared').checked = true;
-   // toggleCompartilhada(true);
+    document.getElementById('nova-tarefa-shared').checked = true;
+    toggleCompartilhada(true);
     renderSeletorResponsaveis('responsaveis-criar', []);
     renderSeletorAdmins('admins-criar', []);
     abrirModal('modal-nova-tarefa');
@@ -627,32 +627,25 @@ async function criarTarefa() {
 // ─────────────────────────────────────────
 // EDITAR RESPONSÁVEIS
 // ─────────────────────────────────────────
-async function criarTarefa() {
-    const descricao        = document.getElementById('nova-tarefa-desc').value.trim();
-    const prioridade       = document.getElementById('nova-tarefa-prio').value;
-    
-    // Agora pegamos os IDs direto. Se estiverem vazios, o Python saberá que é pessoal.
-    const responsaveis_ids = getResponsaveisSelecionados('responsaveis-criar');
-    const admins_ids       = getResponsaveisSelecionados('admins-criar');
+async function abrirModalResponsaveis(codigo) {
+    tarefaEditandoResp = codigo;
+    const tarefa = todasTarefas.find(t => t.codigo === codigo);
 
-    if (!descricao) { toast('Informe uma descrição', 'error'); return; }
+    const [resColabs, resAdmins] = await Promise.all([
+        api('/api/usuarios/colaborativos'),
+        api('/api/usuarios/admins')
+    ]);
+    if (resColabs.ok) responsaveisDisponiveis = await resColabs.json();
+    if (resAdmins.ok) adminsDisponiveis       = await resAdmins.json();
 
-    // Note que removi o campo "compartilhada" do corpo do POST
-    const res = await api('/api/tarefas', 'POST', { 
-        descricao, 
-        prioridade, 
-        responsaveis_ids, 
-        admins_ids 
-    });
+    document.getElementById('modal-resp-titulo').textContent = `Responsáveis — Tarefa #${String(codigo).padStart(4,'0')}`;
 
-    if (res.ok) { 
-        fecharModal('modal-nova-tarefa'); 
-        toast('✅ Tarefa criada!', 'success'); 
-        carregarTarefas(); 
-    } else { 
-        const e = await res.json(); 
-        toast(e.erro || 'Erro ao criar', 'error'); 
-    }
+    const selColabs = tarefa ? tarefa.responsaveis.map(r => r.id)    : [];
+    const selAdmins = tarefa ? (tarefa.admins_colabs || []).map(a => a.id) : [];
+
+    renderSeletorResponsaveis('responsaveis-editar', selColabs);
+    renderSeletorAdmins('admins-editar', selAdmins);
+    abrirModal('modal-responsaveis');
 }
 
 async function salvarResponsaveis() {
