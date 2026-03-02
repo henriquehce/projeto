@@ -143,6 +143,24 @@ function validarSenhaForte(senha) {
 // ─────────────────────────────────────────
 // TROCAR SENHA
 // ─────────────────────────────────────────
+async function salvarTrocaEmail() {
+    const email_novo = document.getElementById('te-email').value.trim();
+    const senha      = document.getElementById('te-senha').value;
+    const err        = document.getElementById('te-error');
+    err.style.display = 'none';
+    if (!email_novo || !senha) { err.textContent = 'Preencha todos os campos'; err.style.display = 'block'; return; }
+    const res = await api('/api/trocar-email', 'POST', { email_novo, senha });
+    const data = await res.json();
+    if (res.ok) {
+        fecharModal('modal-trocar-email');
+        toast('✅ E-mail alterado com sucesso!', 'success');
+        document.getElementById('menu-funcao').textContent = email_novo;
+    } else {
+        err.textContent = data.erro || 'Erro ao alterar e-mail';
+        err.style.display = 'block';
+    }
+}
+
 async function salvarTrocaSenha() {
     const atual = document.getElementById('ts-atual').value;
     const nova  = document.getElementById('ts-nova').value;

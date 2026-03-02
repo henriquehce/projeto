@@ -102,6 +102,10 @@
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     Trocar Senha
                 </button>
+                <button onclick="abrirModal('modal-trocar-email')" class="menu-item">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Trocar E-mail
+                </button>
                 <hr class="menu-divider">
                 <button onclick="fazerLogout()" class="menu-item menu-logout">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
@@ -472,6 +476,32 @@ function atualizarForcaSenha(inputId, containerId) {
     }
 }
 </script>
+
+<!-- MODAL TROCAR E-MAIL -->
+<div id="modal-trocar-email" class="modal-overlay">
+    <div class="modal-box" style="max-width:420px">
+        <div class="modal-header">
+            <h3>Trocar E-mail</h3>
+            <button onclick="fecharModal('modal-trocar-email')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <label class="field-label">Novo e-mail</label>
+            <input type="email" id="te-email" class="field-input" placeholder="novo@email.com">
+            <label class="field-label" style="margin-top:12px">Confirme sua senha</label>
+            <div class="input-password-wrap">
+                <input type="password" id="te-senha" class="field-input" placeholder="Sua senha atual">
+                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('te-senha',this)" tabindex="-1">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+            </div>
+            <div id="te-error" class="error-msg" style="display:none"></div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="fecharModal('modal-trocar-email')" class="btn-ghost">Cancelar</button>
+            <button onclick="salvarTrocaEmail()" class="btn-primary">Salvar E-mail</button>
+        </div>
+    </div>
+</div>
 
 <!-- MODAL CHECKLIST -->
 <div id="modal-checklist" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-checklist')">

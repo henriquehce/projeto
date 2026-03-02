@@ -529,6 +529,32 @@ def trocar_senha():
     return jsonify({'mensagem': 'Senha alterada com sucesso!'}), 200
 
 
+@app.route('/api/trocar-email', methods=['POST'])
+@login_required
+def trocar_email():
+    dados      = request.json
+    senha      = dados.get('senha', '').strip()
+    email_novo = dados.get('email_novo', '').strip().lower()
+    if not senha or not email_novo:
+        return jsonify({'erro': 'Preencha todos os campos'}), 400
+    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_novo):
+        return jsonify({'erro': 'E-mail inválido'}), 400
+    usuario = db.session.get(Usuario, session['usuario_id'])
+    if not usuario.verificar_senha(senha):
+        return jsonify({'erro': 'Senha incorreta'}), 401
+    # Verifica se email já está em uso por outro usuário
+    existente = Usuario.query.filter(
+        Usuario.email == email_novo,
+        Usuario.id != usuario.id
+    ).first()
+    if existente:
+        return jsonify({'erro': 'Este e-mail já está em uso'}), 409
+    usuario.email = email_novo
+    session['usuario_email'] = email_novo
+    db.session.commit()
+    return jsonify({'mensagem': 'E-mail alterado com sucesso!'}), 200
+
+
 @app.route('/api/usuarios/<int:uid>/redefinir-senha', methods=['POST'])
 @admin_required
 def redefinir_senha(uid):
