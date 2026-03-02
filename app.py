@@ -769,7 +769,7 @@ def criar_tarefa():
     db.session.add(nova)
     db.session.flush()
 
-    # Responsaveis colaborativos
+    # Responsaveis colaborativos: apenas do mesmo setor ou sem setor, e que sejam da mesma empresa (se for empresa)
     responsaveis_novos = []
     nomes = []
     if compartilhada:
