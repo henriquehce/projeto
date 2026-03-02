@@ -232,7 +232,7 @@ async function salvarRedefinicaoSenha() {
 // ─────────────────────────────────────────
 // ENTRAR NO APP
 // ─────────────────────────────────────────
-function entrarNoApp() {
+async function entrarNoApp() {
     const admin  = isAdmin();
     const master = isMaster();
     document.getElementById('screen-login').classList.remove('active');
@@ -259,7 +259,17 @@ function entrarNoApp() {
     document.getElementById('btn-relatorio').style.display     = admin ? 'inline-flex' : 'none';
 
     navTo('tarefas');
-    carregarTarefas();
+    await carregarTarefas();
+
+    // Deep link — abre tarefa direto se vier ?tarefa=123 na URL
+    const params   = new URLSearchParams(window.location.search);
+    const codigoUrl = parseInt(params.get('tarefa'));
+    if (codigoUrl) {
+        // Limpa o param da URL sem recarregar
+        window.history.replaceState({}, '', window.location.pathname);
+        // Aguarda um tick para as tarefas renderizarem
+        setTimeout(() => abrirModalComentarios(codigoUrl), 300);
+    }
 }
 
 // ─────────────────────────────────────────
@@ -286,6 +296,9 @@ function toggleSidebar(forceClose = null) {
     sidebar.classList.toggle('open', !close);
     overlay.classList.toggle('active', !close);
 }
+
+// Sidebar começa fechada sempre — usuário abre quando quiser
+// (no mobile o overlay fecha ao clicar fora)
 
 function toggleUserMenu() {
     const menu = document.getElementById('user-menu');
