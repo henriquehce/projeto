@@ -331,8 +331,7 @@ def enviar_email(destinatarios, assunto, corpo_html):
     t.start()
 
 
-def _template_base(titulo, conteudo, codigo_tarefa=None):
-    link = f'{APP_URL}?tarefa={codigo_tarefa}' if codigo_tarefa else APP_URL
+def _template_base(titulo, conteudo):
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f4f4f4; padding: 20px;">
         <div style="background: #0f172a; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
@@ -342,7 +341,7 @@ def _template_base(titulo, conteudo, codigo_tarefa=None):
             <h2 style="color: #0f172a; margin-top: 0;">{titulo}</h2>
             {conteudo}
             <div style="text-align: center; margin: 28px 0 8px;">
-                <a href="{link}" style="display:inline-block;background:#3b82f6;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;font-size:15px;">
+                <a href="{APP_URL}" style="display:inline-block;background:#3b82f6;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;font-size:15px;">
                     👉 Clique aqui e veja sua tarefa
                 </a>
             </div>
@@ -387,7 +386,7 @@ def email_tarefa_criada(tarefa, responsaveis, admin_nome, admin_email):
             <p style="margin:0 0 8px"><strong>Responsaveis:</strong> {resp_nomes}</p>
             <p style="margin:0"><strong>Criada por:</strong> {admin_nome}</p>
         </div>"""
-    enviar_email(list(emails), '[TaskFlow] Nova tarefa criada', _template_base('Nova tarefa criada', conteudo, tarefa.codigo))
+    enviar_email(list(emails), '[TaskFlow] Nova tarefa criada', _template_base('Nova tarefa criada', conteudo))
 
 
 def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
@@ -401,7 +400,7 @@ def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
             <p style="margin:0 0 8px"><strong>Prioridade:</strong> <span style="color:{prioridade_cor};font-weight:bold">{tarefa.prioridade}</span></p>
             <p style="margin:0"><strong>Atribuida por:</strong> {admin_nome}</p>
         </div>"""
-    enviar_email([u.email for u in responsaveis_novos], '[TaskFlow] Tarefa atribuida a voce', _template_base('Nova tarefa atribuida', conteudo, tarefa.codigo))
+    enviar_email([u.email for u in responsaveis_novos], '[TaskFlow] Tarefa atribuida a voce', _template_base('Nova tarefa atribuida', conteudo))
 
 
 def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
@@ -418,7 +417,7 @@ def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
             <p style="margin:0 0 4px;color:#64748b;font-size:12px"><strong>{autor_nome}</strong> comentou:</p>
             <p style="margin:0;color:#0f172a">{comentario_texto}</p>
         </div>"""
-    enviar_email(list(envolvidos), '[TaskFlow] Novo comentario na tarefa', _template_base('Novo comentario', conteudo, tarefa.codigo))
+    enviar_email(list(envolvidos), '[TaskFlow] Novo comentario na tarefa', _template_base('Novo comentario', conteudo))
 
 
 def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nome, alterado_por_id):
@@ -439,7 +438,7 @@ def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nom
             <p style="margin:0 0 8px"><strong>Agora:</strong> <span style="color:{cor};font-weight:bold">{status_novo}</span></p>
             <p style="margin:0"><strong>Alterado por:</strong> {alterado_por_nome}</p>
         </div>"""
-    enviar_email(emails, f'[TaskFlow] Status atualizado: "{status_novo}"', _template_base('Status da tarefa atualizado', conteudo, tarefa.codigo))
+    enviar_email(emails, f'[TaskFlow] Status atualizado: "{status_novo}"', _template_base('Status da tarefa atualizado', conteudo))
 
 
 # ─────────────────────────────────────────
@@ -888,7 +887,15 @@ def atualizar_status(codigo):
     if novo_status not in STATUSES_VALIDOS:
         return jsonify({'erro': 'Status invalido'}), 400
 
-    anterior      = tarefa.status
+    anterior = tarefa.status
+
+    # Bloqueia retorno para "Nao iniciado" se já teve progresso
+    if novo_status == 'Nao iniciado' and anterior != 'Nao iniciado':
+        registrar_historico(codigo, session['usuario_id'],
+            f'{usuario.nome} tentou reverter o status para "Não iniciado" (bloqueado — tarefa já foi iniciada).')
+        db.session.commit()
+        return jsonify({'erro': 'Não é possível reverter para "Não iniciado" após a tarefa ser iniciada.', 'bloqueado': True}), 400
+
     tarefa.status = novo_status
     registrar_historico(codigo, session['usuario_id'],
         f'Status alterado de "{anterior}" para "{novo_status}" por {usuario.nome}.')

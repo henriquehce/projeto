@@ -690,13 +690,22 @@ async function salvarResponsaveis() {
 // STATUS
 // ─────────────────────────────────────────
 async function alterarStatus(codigo, novoStatus) {
-    const res = await api(`/api/tarefas/${codigo}/status`, 'PATCH', { status: novoStatus });
+    const res  = await api(`/api/tarefas/${codigo}/status`, 'PATCH', { status: novoStatus });
     if (res.ok) {
         const idx = todasTarefas.findIndex(t => t.codigo === codigo);
         if (idx !== -1) todasTarefas[idx].status = novoStatus;
         renderizarTarefas();
         toast('Status atualizado', 'success');
-    } else { toast('Erro ao atualizar status', 'error'); carregarTarefas(); }
+    } else {
+        const data = await res.json();
+        if (data.bloqueado) {
+            toast('⛔ ' + data.erro, 'error');
+        } else {
+            toast('Erro ao atualizar status', 'error');
+        }
+        // Reverte o select visualmente para o status atual
+        carregarTarefas();
+    }
 }
 
 // ─────────────────────────────────────────
