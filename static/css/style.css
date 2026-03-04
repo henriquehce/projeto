@@ -987,6 +987,28 @@ body {
 }
 .resp-checkbox.checked .resp-check-mark { display: flex; }
 
+/* Admin colaborador — cor roxa */
+.resp-check-avatar-admin {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border-color: rgba(124,58,237,0.3);
+}
+.resp-checkbox-admin.checked {
+    border-color: #7c3aed;
+    background: rgba(124,58,237,0.08);
+}
+.resp-checkbox-admin.checked .resp-check-avatar-admin {
+    background: #7c3aed;
+    color: white;
+    border-color: #7c3aed;
+}
+.resp-checkbox-admin.checked .resp-check-mark {
+    background: #7c3aed;
+}
+.resp-checkbox-admin:hover {
+    border-color: rgba(124,58,237,0.5);
+}
+
 /* ══════════════════════════════════════
    HISTÓRICO NO MODAL DE COMENTÁRIOS
 ══════════════════════════════════════ */

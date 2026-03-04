@@ -232,7 +232,7 @@ async function salvarRedefinicaoSenha() {
 // ─────────────────────────────────────────
 // ENTRAR NO APP
 // ─────────────────────────────────────────
-async function entrarNoApp() {
+function entrarNoApp() {
     const admin  = isAdmin();
     const master = isMaster();
     document.getElementById('screen-login').classList.remove('active');
@@ -259,17 +259,7 @@ async function entrarNoApp() {
     document.getElementById('btn-relatorio').style.display     = admin ? 'inline-flex' : 'none';
 
     navTo('tarefas');
-    await carregarTarefas();
-
-    // Deep link — abre tarefa direto se vier ?tarefa=123 na URL
-    const params   = new URLSearchParams(window.location.search);
-    const codigoUrl = parseInt(params.get('tarefa'));
-    if (codigoUrl) {
-        // Limpa o param da URL sem recarregar
-        window.history.replaceState({}, '', window.location.pathname);
-        // Aguarda um tick para as tarefas renderizarem
-        setTimeout(() => abrirModalComentarios(codigoUrl), 300);
-    }
+    carregarTarefas();
 }
 
 // ─────────────────────────────────────────
@@ -296,9 +286,6 @@ function toggleSidebar(forceClose = null) {
     sidebar.classList.toggle('open', !close);
     overlay.classList.toggle('active', !close);
 }
-
-// Sidebar começa fechada sempre — usuário abre quando quiser
-// (no mobile o overlay fecha ao clicar fora)
 
 function toggleUserMenu() {
     const menu = document.getElementById('user-menu');
@@ -598,17 +585,24 @@ function renderSeletorAdmins(containerId, selecionados = []) {
         container.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:12px">Nenhum outro administrador cadastrado.</p>';
         return;
     }
-    container.innerHTML = adminsDisponiveis.map(a => {
+    // Admins já na tarefa primeiro, depois os demais
+    const ordenados = [
+        ...adminsDisponiveis.filter(a => selecionados.includes(a.id)),
+        ...adminsDisponiveis.filter(a => !selecionados.includes(a.id))
+    ];
+    container.innerHTML = ordenados.map(a => {
         const marcado = selecionados.includes(a.id);
         const badge   = a.tipo_perfil === 'Admin Master' ? ' 👑' : '';
+        const naTarefa = marcado ? `<span style="font-size:10px;font-weight:700;background:rgba(124,58,237,0.15);color:#a78bfa;border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:2px 8px;white-space:nowrap">Na tarefa</span>` : '';
         return `
-        <label class="resp-checkbox ${marcado ? 'checked' : ''}" data-id="${a.id}">
+        <label class="resp-checkbox resp-checkbox-admin ${marcado ? 'checked' : ''}" data-id="${a.id}">
             <input type="checkbox" value="${a.id}" ${marcado ? 'checked' : ''} onchange="toggleResponsavelCheck(this)">
-            <div class="resp-check-avatar" style="background:var(--accent2,#7c3aed)">${iniciais(a.nome)}</div>
+            <div class="resp-check-avatar resp-check-avatar-admin">${iniciais(a.nome)}</div>
             <div class="resp-check-info">
                 <span class="resp-check-nome">${escapar(a.nome)}${badge}</span>
                 <span class="resp-check-funcao">${escapar(a.funcao)}</span>
             </div>
+            ${naTarefa}
             <div class="resp-check-mark">✓</div>
         </label>`;
     }).join('');
@@ -826,18 +820,16 @@ async function carregarUsuarios() {
         const podExcluir = u.id !== usuarioLogado.id && (isMaster() || (!master && !admin));
         return `
         <div class="usuario-card">
-            <div class="usuario-card-top">
-                <div class="usuario-info">
-                    <div class="usuario-avatar">${iniciais(u.nome)}</div>
-                    <div class="usuario-textos">
-                        <p class="usuario-nome">${escapar(u.nome)}</p>
-                        <p class="usuario-email">${escapar(u.email)}</p>
-                        <p class="usuario-funcao">${escapar(u.funcao)}${u.setor ? ' · ' + escapar(u.setor) : ''}</p>
-                    </div>
+            <div class="usuario-info">
+                <div class="usuario-avatar">${iniciais(u.nome)}</div>
+                <div>
+                    <p class="usuario-nome">${escapar(u.nome)}</p>
+                    <p class="usuario-email">${escapar(u.email)}</p>
+                    <p class="usuario-funcao">${escapar(u.funcao)}${u.setor ? ' · ' + escapar(u.setor) : ''}</p>
                 </div>
-                <span class="perfil-badge ${badgeClass}">${u.tipo_perfil}</span>
             </div>
-            <div class="usuario-acoes">
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+                <span class="perfil-badge ${badgeClass}">${u.tipo_perfil}</span>
                 ${u.trocar_senha ? '<span class="badge-senha">🔑 Troca pendente</span>' : ''}
                 <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -851,12 +843,11 @@ async function carregarUsuarios() {
                     </svg> Editar
                 </button>` : ''}
                 ${podExcluir
-                    ? `<button class="btn-ghost btn-sm btn-excluir-usuario" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
+                    ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
-                        </svg> Excluir
-                    </button>`
-                    : '<span class="usuario-voce">Você</span>'}
+                        </svg></button>`
+                    : '<span style="font-size:12px;color:var(--text-dim)">Você</span>'}
             </div>
         </div>`;
     }).join('');
