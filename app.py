@@ -801,13 +801,18 @@ def criar_tarefa():
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descricao obrigatoria'}), 400
 
-    prioridade    = dados.get('prioridade', 'Nenhuma')
-    compartilhada = dados.get('compartilhada', True)
+    prioridade = dados.get('prioridade', 'Nenhuma')
     if prioridade not in PRIORIDADES_VALIDAS:
         return jsonify({'erro': 'Prioridade invalida'}), 400
 
     admin   = db.session.get(Usuario, session['usuario_id'])
     empresa = admin.empresa
+
+    uids_resp = dados.get('responsaveis_ids', [])
+    uids_adm  = dados.get('admins_ids', [])
+
+    # Compartilhada SOMENTE se tiver responsável colaborativo
+    compartilhada = len(uids_resp) > 0
 
     nova = Tarefa(
         descricao=dados['descricao'], prioridade=prioridade,
@@ -819,27 +824,26 @@ def criar_tarefa():
     # Responsaveis colaborativos
     responsaveis_novos = []
     nomes = []
-    if compartilhada:
-        for uid in dados.get('responsaveis_ids', []):
-            u = db.session.get(Usuario, uid)
-            if u and u.tipo_perfil == 'Colaborativo' and (not empresa or u.empresa == empresa):
-                nova.responsaveis.append(u)
-                responsaveis_novos.append(u)
-                nomes.append(u.nome)
+    for uid in uids_resp:
+        u = db.session.get(Usuario, uid)
+        if u and u.tipo_perfil == 'Colaborativo' and (not empresa or u.empresa == empresa):
+            nova.responsaveis.append(u)
+            responsaveis_novos.append(u)
+            nomes.append(u.nome)
 
-    # Admins colaboradores
-    for uid in dados.get('admins_ids', []):
+    # Admins colaboradores — se adicionados, tarefa vira compartilhada
+    for uid in uids_adm:
         u = db.session.get(Usuario, uid)
         if u and u.is_admin() and u.id != admin.id and (not empresa or u.empresa == empresa):
             nova.admins_colabs.append(u)
+            if not nova.compartilhada:
+                nova.compartilhada = True
 
     msg = f'Tarefa criada por {admin.nome}.'
-    if not compartilhada:
-        msg += ' Tarefa pessoal.'
-    elif nomes:
+    if nomes:
         msg += f' Responsaveis: {", ".join(nomes)}.'
     else:
-        msg += ' Sem responsaveis.'
+        msg += ' Tarefa pessoal.'
 
     registrar_historico(nova.codigo, session['usuario_id'], msg)
     db.session.commit()
@@ -873,15 +877,16 @@ def atualizar_status(codigo):
     if not tarefa:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
-        return jsonify({'erro': 'Acesso negado'}), 403
+        return jsonify({'erro': 'Acesso negado — empresa diferente'}), 403
     # Colaborativo: so pode alterar se for responsavel
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in [u.id for u in tarefa.responsaveis]:
-        return jsonify({'erro': 'Acesso negado'}), 403
+        return jsonify({'erro': 'Acesso negado — você não é responsável desta tarefa'}), 403
     # Admin normal: so pode alterar suas proprias tarefas ou onde e admin colab
     if usuario.tipo_perfil == 'Administrador':
         ids_admins_colabs = [u.id for u in tarefa.admins_colabs]
+        print(f'[STATUS] usuario={usuario.id} criado_por={tarefa.criado_por} admins_colabs={ids_admins_colabs}')
         if tarefa.criado_por != usuario.id and usuario.id not in ids_admins_colabs:
-            return jsonify({'erro': 'Acesso negado'}), 403
+            return jsonify({'erro': f'Acesso negado — você não é criador nem admin colaborador desta tarefa'}), 403
 
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
@@ -952,11 +957,14 @@ def atualizar_responsaveis(codigo):
             if u.id not in ids_antes:
                 responsaveis_novos.append(u)
 
-    nomes_antes_str = ', '.join(
-        db.session.get(Usuario, i).nome for i in ids_antes if db.session.get(Usuario, i)
-    ) or 'nenhum'
-    registrar_historico(codigo, session['usuario_id'],
-        f'Responsaveis alterados por {admin.nome}. Antes: {nomes_antes_str}. Agora: {", ".join(nomes_depois) or "nenhum"}.')
+    ids_depois = {u.id for u in tarefa.responsaveis}
+    # Só registra log se houve mudança real
+    if ids_antes != ids_depois:
+        nomes_antes_str = ', '.join(
+            db.session.get(Usuario, i).nome for i in ids_antes if db.session.get(Usuario, i)
+        ) or 'nenhum'
+        registrar_historico(codigo, session['usuario_id'],
+            f'Responsaveis alterados por {admin.nome}. Antes: {nomes_antes_str}. Agora: {", ".join(nomes_depois) or "nenhum"}.')
     db.session.commit()
 
     if responsaveis_novos:
@@ -979,6 +987,7 @@ def atualizar_admins_colab(codigo):
         return jsonify({'erro': 'Acesso negado'}), 403
 
     empresa = admin.empresa
+    ids_admins_antes = {u.id for u in tarefa.admins_colabs}
     tarefa.admins_colabs.clear()
     nomes = []
     for uid in request.json.get('admins_ids', []):
@@ -987,8 +996,18 @@ def atualizar_admins_colab(codigo):
             tarefa.admins_colabs.append(u)
             nomes.append(u.nome)
 
-    registrar_historico(codigo, session['usuario_id'],
-        f'Admins colaboradores atualizados por {admin.nome}: {", ".join(nomes) or "nenhum"}.')
+    # Se há admins colaboradores, a tarefa precisa ser compartilhada para eles verem
+    if nomes and not tarefa.compartilhada:
+        tarefa.compartilhada = True
+    # Se removeu todos os admins colabs E não tem responsáveis, volta a ser pessoal
+    elif not nomes and not tarefa.responsaveis:
+        tarefa.compartilhada = False
+
+    ids_admins_depois = {u.id for u in tarefa.admins_colabs}
+    # Só registra log se houve mudança real
+    if ids_admins_antes != ids_admins_depois:
+        registrar_historico(codigo, session['usuario_id'],
+            f'Admins colaboradores atualizados por {admin.nome}: {", ".join(nomes) or "nenhum"}.')
     db.session.commit()
     return jsonify(tarefa.to_dict()), 200
 
