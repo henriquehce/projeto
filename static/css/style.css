@@ -692,56 +692,32 @@ body {
 .usuarios-list { display: flex; flex-direction: column; gap: 10px; }
 
 .usuario-card {
-    display: flex;
-    flex-direction: column;
+    display: flex; align-items: center; justify-content: space-between;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 14px 16px;
+    padding: 16px 20px;
     transition: var(--trans);
-    gap: 10px;
+    gap: 12px;
 }
 .usuario-card:hover { border-color: var(--border2); }
 
-.usuario-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-.usuario-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-
-.usuario-textos { min-width: 0; }
+.usuario-info { display: flex; align-items: center; gap: 14px; flex: 1; }
 
 .usuario-avatar {
-    width: 40px; height: 40px;
+    width: 42px; height: 42px;
     border-radius: 50%;
     background: var(--surface2);
     border: 1px solid var(--border);
     display: flex; align-items: center; justify-content: center;
     font-family: 'Syne', sans-serif;
-    font-weight: 700; font-size: 13px;
+    font-weight: 700; font-size: 14px;
     flex-shrink: 0;
 }
 
-.usuario-nome { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.usuario-email { font-size: 11px; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.usuario-funcao { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.usuario-acoes {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
-}
-
-.usuario-voce { font-size: 11px; color: var(--text-dim); }
-
-.btn-excluir-usuario { color: #ef4444 !important; }
-.btn-excluir-usuario:hover { background: rgba(239,68,68,0.1) !important; border-color: rgba(239,68,68,0.3) !important; }
+.usuario-nome { font-weight: 600; font-size: 14px; }
+.usuario-email { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.usuario-funcao { font-size: 12px; color: var(--text-dim); }
 
 /* ══════════════════════════════════════
    MODAIS
@@ -1143,7 +1119,7 @@ body {
 .td-date { width: 130px; color: var(--text-muted); font-size: 13px; }
 .td-prio { width: 100px; }
 .td-status { width: 170px; }
-.td-actions { width: 160px; }
+.td-actions { width: 210px; min-width: 210px; }
 
 .table-desc {
     display: -webkit-box;
@@ -1176,7 +1152,8 @@ body {
     gap: 6px;
     align-items: center;
     flex-wrap: nowrap;
-    padding: 0 4px;
+    padding: 0 6px;
+    overflow: visible;
 }
 
 /* Botão de ação base */
