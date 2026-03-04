@@ -158,7 +158,7 @@ class Tarefa(db.Model):
     codigo         = db.Column(db.Integer, primary_key=True, autoincrement=True)
     descricao      = db.Column(db.Text, nullable=False)
     data_criacao   = db.Column(db.DateTime, default=agora_br)
-    status         = db.Column(db.String(30), default='Nao iniciado')
+    status         = db.Column(db.String(30), default='Não iniciado')
     prioridade     = db.Column(db.String(10), default='Nenhuma')
     compartilhada  = db.Column(db.Boolean, default=True)
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
@@ -426,7 +426,7 @@ def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nom
     if not emails:
         return
     STATUS_COR = {
-        'Nao iniciado': '#94a3b8', 'Iniciado': '#3b82f6', 'Em andamento': '#8b5cf6',
+        'Não iniciado': '#94a3b8', 'Iniciado': '#3b82f6', 'Em andamento': '#8b5cf6',
         'Pausado': '#f59e0b', 'Aguardo retorno': '#f97316', 'Finalizado': '#22c55e',
     }
     cor = STATUS_COR.get(status_novo, '#64748b')
@@ -745,7 +745,7 @@ def listar_setores():
 # ─────────────────────────────────────────
 # TAREFAS
 # ─────────────────────────────────────────
-STATUSES_VALIDOS    = ['Nao iniciado', 'Iniciado', 'Em andamento', 'Pausado', 'Aguardo retorno', 'Finalizado']
+STATUSES_VALIDOS    = ['Não iniciado', 'Iniciado', 'Em andamento', 'Pausado', 'Aguardo retorno', 'Finalizado']
 PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
 
 
@@ -889,8 +889,8 @@ def atualizar_status(codigo):
 
     anterior = tarefa.status
 
-    # Bloqueia retorno para "Nao iniciado" se já teve progresso
-    if novo_status == 'Nao iniciado' and anterior != 'Nao iniciado':
+    # Bloqueia retorno para "Não iniciado" se já teve progresso
+    if novo_status == 'Não iniciado' and anterior != 'Não iniciado':
         registrar_historico(codigo, session['usuario_id'],
             f'{usuario.nome} tentou reverter o status para "Não iniciado" (bloqueado — tarefa já foi iniciada).')
         db.session.commit()
