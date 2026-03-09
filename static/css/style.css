@@ -702,10 +702,36 @@ body {
 }
 .usuario-card:hover { border-color: var(--border2); }
 
-.usuario-info { display: flex; align-items: center; gap: 14px; flex: 1; }
+.usuario-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+.usuario-info > div { min-width: 0; }
+.usuario-nome  { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usuario-email { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usuario-funcao { font-size: 12px; color: var(--text-dim); }
+
+.usuario-acoes {
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+    .usuario-card {
+        flex-wrap: wrap;
+        padding: 14px 16px;
+        gap: 10px;
+    }
+    .usuario-info { flex: 1 1 100%; }
+    .usuario-acoes {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        gap: 6px;
+    }
+    .usuario-acoes .perfil-badge { display: none; } /* já vê no card */
+}
 
 .usuario-avatar {
-    width: 42px; height: 42px;
+    width: 40px; height: 40px;
     border-radius: 50%;
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -714,10 +740,6 @@ body {
     font-weight: 700; font-size: 14px;
     flex-shrink: 0;
 }
-
-.usuario-nome { font-weight: 600; font-size: 14px; }
-.usuario-email { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.usuario-funcao { font-size: 12px; color: var(--text-dim); }
 
 /* ══════════════════════════════════════
    MODAIS

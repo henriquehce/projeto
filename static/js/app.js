@@ -866,7 +866,7 @@ async function carregarUsuarios() {
                     <p class="usuario-funcao">${escapar(u.funcao)}${u.setor ? ' · ' + escapar(u.setor) : ''}</p>
                 </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+            <div class="usuario-acoes">
                 <span class="perfil-badge ${badgeClass}">${u.tipo_perfil}</span>
                 ${u.trocar_senha ? '<span class="badge-senha">🔑 Troca pendente</span>' : ''}
                 <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
