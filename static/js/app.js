@@ -4,7 +4,7 @@
 
 let usuarioLogado  = null;
 let todasTarefas   = [];
-let filtroAtual    = 'todos';
+let filtrosAtivos   = new Set(); // vazio = todas
 let buscaAtual     = '';
 let tarefaAberta   = null;
 let deferredPrompt = null;
@@ -322,7 +322,9 @@ async function carregarTarefas() {
 // TAREFAS — FILTRAR
 // ─────────────────────────────────────────
 function getTarefasFiltradas() {
-    let lista = filtroAtual === 'todos' ? todasTarefas : todasTarefas.filter(t => t.status === filtroAtual);
+    let lista = filtrosAtivos.size === 0
+        ? todasTarefas
+        : todasTarefas.filter(t => filtrosAtivos.has(t.status));
     if (buscaAtual.trim()) {
         const q = buscaAtual.trim().toLowerCase();
         lista = lista.filter(t =>
@@ -360,9 +362,29 @@ function ordenarPor(coluna) {
 }
 
 function filtrarStatus(status, btn) {
-    filtroAtual = status;
-    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
+    if (status === 'todos') {
+        // Se "Todas" já está ativo (todos selecionados), limpa tudo → mostra todas
+        if (filtrosAtivos.size === 0) {
+            // já está mostrando tudo, não faz nada
+        } else {
+            filtrosAtivos.clear();
+        }
+    } else {
+        if (filtrosAtivos.has(status)) {
+            filtrosAtivos.delete(status); // deseleciona
+        } else {
+            filtrosAtivos.add(status);    // acumula
+        }
+    }
+    // Atualiza visual dos chips
+    document.querySelectorAll('.filter-chip').forEach(c => {
+        const s = c.getAttribute('data-status');
+        if (s === 'todos') {
+            c.classList.toggle('active', filtrosAtivos.size === 0);
+        } else {
+            c.classList.toggle('active', filtrosAtivos.has(s));
+        }
+    });
     renderizarTarefas();
 }
 
@@ -415,7 +437,7 @@ function renderizarTarefas() {
 
 function renderCard(t, admin) {
     const cls     = statusClass(t.status);
-    const podEditar = admin && t.compartilhada && (isMaster() || t.criado_por === usuarioLogado.id);
+    const podEditar = admin && t.compartilhada && t.responsaveis && t.responsaveis.length > 0 && (isMaster() || t.criado_por === usuarioLogado.id);
     const podExcluir = admin && (isMaster() || t.criado_por === usuarioLogado.id);
 
     // Badge de admins colaboradores
@@ -436,8 +458,7 @@ function renderCard(t, admin) {
         <p class="task-desc">${escapar(t.descricao)}</p>
         ${badgeChecklist(t)}
         <div class="task-responsaveis">
-            ${renderResponsaveisAvatares(t.responsaveis)}
-            ${adminsHtml}
+            ${renderResponsaveisAvatares(t.responsaveis, t.admins_colabs)}
             ${podEditar ? `<button class="btn-edit-resp" onclick="event.stopPropagation();abrirModalResponsaveis(${t.codigo})" title="Editar responsáveis">
                 <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -469,11 +490,15 @@ function renderCard(t, admin) {
 }
 
 function renderLinha(t, admin) {
-    const nomes = t.responsaveis && t.responsaveis.length
-        ? t.responsaveis.map(r => `<span class="table-resp-chip">${escapar(iniciais(r.nome))}</span>`).join('')
+    const todosResp = [
+        ...(t.responsaveis || []).map(r => ({ ...r, tipo: 'resp' })),
+        ...(t.admins_colabs || []).map(a => ({ ...a, tipo: 'admin' }))
+    ];
+    const nomes = todosResp.length
+        ? todosResp.map(r => `<span class="table-resp-chip${r.tipo === 'admin' ? ' table-resp-chip-admin' : ''}">${escapar(iniciais(r.nome))}</span>`).join('')
         : `<span class="sem-responsavel">${!t.compartilhada ? '🔒 Pessoal' : '—'}</span>`;
 
-    const podEditar  = admin && t.compartilhada && (isMaster() || t.criado_por === usuarioLogado.id);
+    const podEditar  = admin && t.compartilhada && t.responsaveis && t.responsaveis.length > 0 && (isMaster() || t.criado_por === usuarioLogado.id);
     const podExcluir = admin && (isMaster() || t.criado_por === usuarioLogado.id);
 
     return `
@@ -538,12 +563,17 @@ function badgesPerspectiva(t) {
     return html;
 }
 
-function renderResponsaveisAvatares(responsaveis) {
-    if (!responsaveis || !responsaveis.length) return `<span class="sem-responsavel">Sem responsável</span>`;
-    const vis    = responsaveis.slice(0, 3);
-    const extras = responsaveis.length - 3;
-    return `<div class="resp-group" title="${escapar(responsaveis.map(r=>r.nome).join(', '))}">
-        ${vis.map(r => `<div class="resp-avatar">${iniciais(r.nome)}</div>`).join('')}
+function renderResponsaveisAvatares(responsaveis, admins_colabs) {
+    const todos = [
+        ...(responsaveis || []).map(r => ({ ...r, tipo: 'resp' })),
+        ...(admins_colabs || []).map(a => ({ ...a, tipo: 'admin' }))
+    ];
+    if (!todos.length) return `<span class="sem-responsavel">Sem responsável</span>`;
+    const vis    = todos.slice(0, 3);
+    const extras = todos.length - 3;
+    const nomes  = todos.map(r => r.nome).join(', ');
+    return `<div class="resp-group" title="${escapar(nomes)}">
+        ${vis.map(r => `<div class="resp-avatar${r.tipo === 'admin' ? ' resp-avatar-admin' : ''}">${iniciais(r.nome)}</div>`).join('')}
         ${extras > 0 ? `<div class="resp-avatar resp-extra">+${extras}</div>` : ''}
     </div>`;
 }
@@ -697,13 +727,12 @@ async function alterarStatus(codigo, novoStatus) {
         renderizarTarefas();
         toast('Status atualizado', 'success');
     } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.bloqueado) {
             toast('⛔ ' + data.erro, 'error');
         } else {
-            toast('Erro ao atualizar status', 'error');
+            toast('❌ ' + (data.erro || 'Erro ao atualizar status'), 'error');
         }
-        // Reverte o select visualmente para o status atual
         carregarTarefas();
     }
 }

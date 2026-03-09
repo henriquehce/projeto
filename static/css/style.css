@@ -1585,3 +1585,15 @@ body {
     border-color: #fbbf24;
     box-shadow: 0 2px 8px rgba(251,191,36,0.2);
 }
+
+/* Avatar roxo para admins colaboradores na coluna de responsável */
+.resp-avatar-admin {
+    background: rgba(124,58,237,0.2) !important;
+    color: #a78bfa !important;
+    border: 1.5px solid rgba(124,58,237,0.4) !important;
+}
+.table-resp-chip-admin {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(124,58,237,0.3);
+}

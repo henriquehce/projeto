@@ -163,13 +163,13 @@
                 </div>
             </div>
             <div class="filters-bar">
-                <button class="filter-chip active" onclick="filtrarStatus('todos', this)">Todas</button>
-                <button class="filter-chip" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
-                <button class="filter-chip" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
-                <button class="filter-chip" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
-                <button class="filter-chip" onclick="filtrarStatus('Pausado', this)">Pausado</button>
-                <button class="filter-chip" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
-                <button class="filter-chip" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
+                <button class="filter-chip active" data-status="todos" onclick="filtrarStatus('todos', this)">Todas</button>
+                <button class="filter-chip" data-status="Não iniciado" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
+                <button class="filter-chip" data-status="Iniciado" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
+                <button class="filter-chip" data-status="Em andamento" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
+                <button class="filter-chip" data-status="Pausado" onclick="filtrarStatus('Pausado', this)">Pausado</button>
+                <button class="filter-chip" data-status="Aguardo retorno" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
+                <button class="filter-chip" data-status="Finalizado" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
             </div>
 
             <div id="tasks-grid" class="tasks-grid"></div>
