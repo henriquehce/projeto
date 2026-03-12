@@ -680,27 +680,29 @@ function atualizarForcaSenha(inputId, containerId) {
 <!-- MODAL RELATÓRIO DE PENDÊNCIAS -->
 <div id="modal-relatorio" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-relatorio')">
     <div class="modal-box" style="max-width:800px;max-height:90vh">
-        <div class="modal-header">
-            <h3>📊 Relatório de Pendências</h3>
-            <div style="display:flex;gap:8px;align-items:center">
-                <button class="btn-ghost btn-sm" onclick="imprimirRelatorio()" title="Imprimir">
+        <div class="modal-header" style="gap:8px">
+            <div style="min-width:0">
+                <h3 style="font-size:clamp(14px,4vw,18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📊 Relatório de Pendências</h3>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                <button class="btn-ghost btn-sm rel-btn-acao" onclick="imprimirRelatorio()" title="Imprimir">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Imprimir
+                    <span class="rel-btn-label">Imprimir</span>
                 </button>
-                <button class="btn-ghost btn-sm" onclick="exportarRelatorioExcel()" title="Exportar Excel" style="color:var(--green)">
+                <button class="btn-ghost btn-sm rel-btn-acao" onclick="exportarRelatorioExcel()" title="Exportar Excel" style="color:var(--green)">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-                    Excel
+                    <span class="rel-btn-label">Excel</span>
                 </button>
                 <button onclick="fecharModal('modal-relatorio')" class="modal-close">✕</button>
             </div>
         </div>
-        <div style="padding:12px 24px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <label style="font-size:13px;color:var(--text-dim);white-space:nowrap">Filtrar por pessoa:</label>
-            <select id="relatorio-filtro-usuario" class="field-select" style="flex:1;min-width:160px;max-width:280px;padding:6px 10px;font-size:13px" onchange="aplicarFiltroRelatorio()">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
+            <label style="font-size:12px;color:var(--text-dim);white-space:nowrap" class="rel-filtro-label">Filtrar por pessoa:</label>
+            <select id="relatorio-filtro-usuario" class="field-select" style="flex:1;padding:6px 10px;font-size:13px" onchange="aplicarFiltroRelatorio()">
                 <option value="">— Todos</option>
             </select>
         </div>
-        <div class="modal-body" id="relatorio-corpo" style="overflow-y:auto;max-height:calc(90vh - 180px)">
+        <div class="modal-body" id="relatorio-corpo" style="overflow-y:auto;max-height:calc(90vh - 130px);padding:0">
         </div>
     </div>
 </div>

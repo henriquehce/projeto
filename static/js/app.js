@@ -1338,7 +1338,9 @@ function aplicarFiltroRelatorio() {
 }
 
 function renderizarRelatorio(dados) {
-    const corpo = document.getElementById('relatorio-corpo');
+    const corpo  = document.getElementById('relatorio-corpo');
+    const mobile = window.innerWidth <= 600;
+
     if (!dados.por_usuario.length) {
         corpo.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px">🎉 Nenhuma pendência em aberto!</p>';
         return;
@@ -1349,6 +1351,35 @@ function renderizarRelatorio(dados) {
         'Pausado': '#f59e0b', 'Aguardo retorno': '#f97316', 'Finalizado': '#22c55e'
     };
 
+    const renderTarefas = (tarefas) => mobile
+        ? tarefas.map(t => `
+            <div class="rel-card">
+                <div class="rel-card-top">
+                    <span class="rel-card-code">#${String(t.codigo).padStart(4,'0')}</span>
+                    <span class="rel-card-data">${t.data_criacao}</span>
+                </div>
+                <p class="rel-card-desc">${escapar(t.descricao)}</p>
+                <div class="rel-card-bottom">
+                    <span style="color:${STATUS_COR[t.status]||'#94a3b8'};font-size:12px;font-weight:600">${t.status}</span>
+                    ${t.prioridade === 'Alta' ? '<span class="badge-prio prio-alta">↑ Alta</span>' : ''}
+                </div>
+            </div>`).join('')
+        : `<table class="relatorio-table">
+            <thead><tr>
+                <th>#</th><th>Descrição</th><th>Status</th><th>Prioridade</th><th>Criação</th>
+            </tr></thead>
+            <tbody>
+            ${tarefas.map(t => `
+                <tr>
+                    <td style="color:var(--text-dim);font-size:12px">#${String(t.codigo).padStart(4,'0')}</td>
+                    <td>${escapar(t.descricao)}</td>
+                    <td><span style="color:${STATUS_COR[t.status]||'#94a3b8'};font-size:12px;font-weight:600">${t.status}</span></td>
+                    <td>${t.prioridade === 'Alta' ? '<span class="badge-prio prio-alta">↑ Alta</span>' : '<span style="color:var(--text-dim);font-size:12px">—</span>'}</td>
+                    <td style="color:var(--text-dim);font-size:12px;white-space:nowrap">${t.data_criacao}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+
     corpo.innerHTML = `
         <div class="relatorio-header-info">
             <span>Gerado em: <strong>${dados.gerado_em}</strong></span>
@@ -1357,28 +1388,14 @@ function renderizarRelatorio(dados) {
         ${dados.por_usuario.map(item => `
         <div class="relatorio-pessoa">
             <div class="relatorio-pessoa-header">
-                <div class="resp-avatar" style="width:36px;height:36px;font-size:14px">${iniciais(item.usuario.nome)}</div>
-                <div>
-                    <strong>${escapar(item.usuario.nome)}</strong>
-                    <span style="color:var(--text-dim);font-size:12px"> · ${escapar(item.usuario.funcao)}${item.usuario.setor ? ' / ' + escapar(item.usuario.setor) : ''}</span>
+                <div class="resp-avatar" style="width:36px;height:36px;font-size:14px;flex-shrink:0">${iniciais(item.usuario.nome)}</div>
+                <div style="min-width:0;flex:1">
+                    <strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapar(item.usuario.nome)}</strong>
+                    <span style="color:var(--text-dim);font-size:12px">${escapar(item.usuario.funcao)}${item.usuario.setor ? ' · ' + escapar(item.usuario.setor) : ''}</span>
                 </div>
                 <span class="badge-relatorio-total">${item.total} pendência${item.total !== 1 ? 's' : ''}</span>
             </div>
-            <table class="relatorio-table">
-                <thead><tr>
-                    <th>#</th><th>Descrição</th><th>Status</th><th>Prioridade</th><th>Criação</th>
-                </tr></thead>
-                <tbody>
-                ${item.tarefas.map(t => `
-                    <tr>
-                        <td style="color:var(--text-dim);font-size:12px">#${String(t.codigo).padStart(4,'0')}</td>
-                        <td>${escapar(t.descricao)}</td>
-                        <td><span style="color:${STATUS_COR[t.status]||'#94a3b8'};font-size:12px;font-weight:600">${t.status}</span></td>
-                        <td>${t.prioridade === 'Alta' ? '<span class="badge-prio prio-alta">↑ Alta</span>' : '<span style="color:var(--text-dim);font-size:12px">—</span>'}</td>
-                        <td style="color:var(--text-dim);font-size:12px;white-space:nowrap">${t.data_criacao}</td>
-                    </tr>`).join('')}
-                </tbody>
-            </table>
+            ${renderTarefas(item.tarefas)}
         </div>`).join('')}
     `;
 }
