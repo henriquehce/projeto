@@ -1513,16 +1513,28 @@ function renderDashboard(d) {
         }).join('')
         : '<p style="color:var(--text-dim);font-size:13px;padding:8px 0">Nenhuma pendência.</p>';
 
-    // ── Tarefas recentes ─────────────────────────────────────
+    // ── Tarefas (recentes ou filtradas) ─────────────────────
+    const temFiltro   = dashFiltroStatus || dashFiltroUsuario;
+    const tituloLista = temFiltro ? 'Tarefas filtradas' : 'Tarefas mais recentes';
+    const subLista    = temFiltro ? '· clique para abrir' : '· 8 mais recentes · clique para abrir';
+    const elTitulo    = document.getElementById('dash-recentes-titulo');
+    if (elTitulo) elTitulo.innerHTML = `${tituloLista} <span style="font-size:10px;font-weight:400;opacity:.6">${subLista}</span>`;
+
     document.getElementById('dash-recentes').innerHTML = d.recentes.length
-        ? d.recentes.map(t => `
-        <div class="dash-recente-row" onclick="dashAbrirTarefa(${t.codigo})" title="Ver tarefa #${t.codigo}">
-            <span style="font-size:11px;color:var(--text-dim);min-width:40px">#${String(t.codigo).padStart(4,'0')}</span>
-            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</span>
-            ${t.responsaveis.length ? `<span style="font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis">${escapar(t.responsaveis[0])}${t.responsaveis.length > 1 ? ' +' + (t.responsaveis.length - 1) : ''}</span>` : ''}
-            <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap;min-width:90px;text-align:right">${t.status}</span>
-        </div>`).join('')
-        : '<p style="color:var(--text-dim);font-size:13px">Nenhuma tarefa.</p>';
+        ? d.recentes.map(t => {
+            // Mostra responsáveis se existirem, ou criador da tarefa (admins/pessoal)
+            const pessoaNome = t.responsaveis.length
+                ? t.responsaveis[0] + (t.responsaveis.length > 1 ? ` +${t.responsaveis.length - 1}` : '')
+                : (t.criado_por_nome ? `👤 ${t.criado_por_nome}` : '');
+            return `
+            <div class="dash-recente-row" onclick="dashAbrirTarefa(${t.codigo})" title="Abrir tarefa #${t.codigo}">
+                <span style="font-size:11px;color:var(--accent);font-weight:700;min-width:42px">#${String(t.codigo).padStart(4,'0')}</span>
+                <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</span>
+                ${pessoaNome ? `<span style="font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis">${escapar(pessoaNome)}</span>` : ''}
+                <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap;min-width:80px;text-align:right">${t.status}</span>
+            </div>`;
+        }).join('')
+        : '<p style="color:var(--text-dim);font-size:13px;padding:4px 0">Nenhuma tarefa neste filtro.</p>';
 
     // ── Gráfico de barras SVG ────────────────────────────────
     const grafH  = 90;

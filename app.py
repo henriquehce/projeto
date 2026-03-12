@@ -861,22 +861,34 @@ def dashboard():
         if d in criacoes_por_dia:
             criacoes_por_dia[d] += 1
 
-    # Lista de responsáveis únicos (para o filtro no front)
-    responsaveis_set = {}
+    # Lista de TODAS as pessoas com tarefas (responsáveis + criadores + admins_colabs) para o filtro
+    pessoas_set = {}
     for t in todas_tarefas:
+        # Responsáveis colaborativos
         for r in t.responsaveis:
-            if r.id not in responsaveis_set:
-                responsaveis_set[r.id] = r.nome
-    responsaveis_lista = sorted([{'id': k, 'nome': v} for k, v in responsaveis_set.items()], key=lambda x: x['nome'])
+            if r.id not in pessoas_set:
+                pessoas_set[r.id] = r.nome
+        # Admins colaboradores adicionados à tarefa
+        for a in t.admins_colabs:
+            if a.id not in pessoas_set:
+                pessoas_set[a.id] = a.nome
+        # Criador da tarefa (admin/master com tarefas pessoais)
+        if t.criado_por:
+            criador = db.session.get(Usuario, t.criado_por)
+            if criador and criador.id not in pessoas_set:
+                pessoas_set[criador.id] = criador.nome
+    responsaveis_lista = sorted([{'id': k, 'nome': v} for k, v in pessoas_set.items()], key=lambda x: x['nome'])
 
-    # Por usuário (ranking de pendências) — inclui responsáveis E criadores de tarefas pessoais
+    # Por usuário (ranking de pendências) — inclui responsáveis, admins_colabs E criadores de tarefas pessoais
     por_usuario = {}
     for t in todas_tarefas:
         if t.status == 'Finalizado':
             continue
-        ids_resp = [r.id for r in t.responsaveis]
+        ids_resp      = [r.id for r in t.responsaveis]
+        ids_adm_colab = [a.id for a in t.admins_colabs]
+
         if ids_resp:
-            # Tarefa compartilhada — conta para cada responsável
+            # Tarefa compartilhada com colaborativos — conta para cada responsável
             for r in t.responsaveis:
                 if filtro_uid_resp and r.id != filtro_uid_resp:
                     continue
@@ -885,8 +897,18 @@ def dashboard():
                 por_usuario[r.id]['total'] += 1
                 if t.prioridade == 'Alta':
                     por_usuario[r.id]['alta'] += 1
+        elif ids_adm_colab:
+            # Tarefa delegada a admins colaboradores
+            for a in t.admins_colabs:
+                if filtro_uid_resp and a.id != filtro_uid_resp:
+                    continue
+                if a.id not in por_usuario:
+                    por_usuario[a.id] = {'nome': a.nome, 'total': 0, 'alta': 0, 'id': a.id}
+                por_usuario[a.id]['total'] += 1
+                if t.prioridade == 'Alta':
+                    por_usuario[a.id]['alta'] += 1
         elif t.criado_por:
-            # Tarefa pessoal — conta para o criador (admin/master)
+            # Tarefa pessoal — conta para o criador
             if filtro_uid_resp and t.criado_por != filtro_uid_resp:
                 continue
             criador = db.session.get(Usuario, t.criado_por)
@@ -898,6 +920,24 @@ def dashboard():
                     por_usuario[criador.id]['alta'] += 1
     ranking = sorted(por_usuario.values(), key=lambda x: x['total'], reverse=True)[:10]
 
+    # Tarefas filtradas para exibição — quando há filtro ativo, mostra todas as tarefas
+    # da pessoa/status filtrado ordenadas por código desc (não só as 8 recentes)
+    base_lista = tarefas_filtradas if (filtro_status or filtro_uid_resp) else \
+                 sorted(todas_tarefas if not filtro_uid_resp else
+                        [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)],
+                        key=lambda t: t.codigo, reverse=True)[:8]
+
+    # Quando há filtro de pessoa, inclui tarefas onde ela é criador, resp ou admin_colab
+    if filtro_uid_resp and not filtro_status:
+        base_lista = [t for t in todas_tarefas if (
+            any(r.id == filtro_uid_resp for r in t.responsaveis) or
+            any(a.id == filtro_uid_resp for a in t.admins_colabs) or
+            t.criado_por == filtro_uid_resp
+        )]
+        base_lista = sorted(base_lista, key=lambda t: t.codigo, reverse=True)
+    elif not filtro_uid_resp and not filtro_status:
+        base_lista = sorted(todas_tarefas, key=lambda t: t.codigo, reverse=True)[:8]
+
     return jsonify({
         'total':             total,
         'por_status':        por_status,
@@ -905,7 +945,9 @@ def dashboard():
         'finalizadas':       por_status.get('Finalizado', 0),
         'pendentes':         total - por_status.get('Finalizado', 0),
         'recentes':          [{'codigo': t.codigo, 'descricao': t.descricao, 'status': t.status, 'prioridade': t.prioridade,
-                               'responsaveis': [r.nome for r in t.responsaveis]} for t in recentes],
+                               'responsaveis': [r.nome for r in t.responsaveis],
+                               'criado_por_nome': db.session.get(Usuario, t.criado_por).nome if t.criado_por else None}
+                              for t in base_lista],
         'criacoes_por_dia':  [{'dia': k, 'total': v} for k, v in criacoes_por_dia.items()],
         'responsaveis_lista': responsaveis_lista,
         'ranking_pendencias': ranking,
