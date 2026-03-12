@@ -1558,6 +1558,49 @@ body {
 }
 
 /* ══════════════════════════════════════
+   DASHBOARD
+══════════════════════════════════════ */
+.dash-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+}
+.dash-card-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+.dash-card-num {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+}
+.dash-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+}
+.dash-panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+@media (max-width: 640px) {
+    #page-dashboard > div:nth-child(2) { grid-template-columns: 1fr 1fr !important; }
+    .dash-panel:last-child,
+    .dash-panel:nth-child(1),
+    .dash-panel:nth-child(2) { grid-column: 1 / -1 !important; }
+}
+
+/* ══════════════════════════════════════
    CHECKLIST — mini barra no card
 ══════════════════════════════════════ */
 .checklist-mini {

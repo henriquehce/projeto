@@ -254,9 +254,11 @@ function entrarNoApp() {
     document.getElementById('menu-nome').textContent       = usuarioLogado.nome;
     document.getElementById('menu-funcao').textContent     = usuarioLogado.funcao;
 
-    document.getElementById('btn-nova-tarefa').style.display   = admin ? 'flex'  : 'none';
-    document.getElementById('nav-usuarios-item').style.display = admin ? 'block' : 'none';
-    document.getElementById('btn-relatorio').style.display     = admin ? 'inline-flex' : 'none';
+    document.getElementById('btn-nova-tarefa').style.display     = admin ? 'flex'        : 'none';
+    document.getElementById('nav-usuarios-item').style.display   = admin ? 'block'       : 'none';
+    document.getElementById('nav-dashboard-item').style.display  = admin ? 'block'       : 'none';
+    document.getElementById('nav-lixeira-item').style.display    = admin ? 'block'       : 'none';
+    document.getElementById('btn-relatorio').style.display       = admin ? 'inline-flex' : 'none';
 
     navTo('tarefas');
     carregarTarefas();
@@ -272,7 +274,9 @@ function navTo(pageName) {
     const navEl = document.querySelector(`.nav-item[data-page="${pageName}"]`);
     if (navEl) navEl.classList.add('active');
     toggleSidebar(false);
-    if (pageName === 'usuarios') carregarUsuarios();
+    if (pageName === 'usuarios')   carregarUsuarios();
+    if (pageName === 'dashboard')  carregarDashboard();
+    if (pageName === 'lixeira')    carregarLixeira();
 }
 
 // ─────────────────────────────────────────
@@ -869,6 +873,7 @@ async function carregarUsuarios() {
             <div class="usuario-acoes">
                 <span class="perfil-badge ${badgeClass}">${u.tipo_perfil}</span>
                 ${u.trocar_senha ? '<span class="badge-senha">🔑 Troca pendente</span>' : ''}
+                ${u.tarefas_ativas > 0 ? `<span style="font-size:11px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:999px;font-weight:600">${u.tarefas_ativas} tarefa${u.tarefas_ativas !== 1 ? 's' : ''}</span>` : ''}
                 <button class="btn-ghost btn-sm" onclick="abrirModalRedefinirSenha(${u.id}, '${escapar(u.nome)}')" title="Redefinir senha">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -1247,18 +1252,40 @@ function formataBytes(b) {
 // ─────────────────────────────────────────
 // LOG DE ACESSOS
 // ─────────────────────────────────────────
+let logAcessosUid = null;
+let logAcessosNome = '';
+
 async function abrirLogAcessos(uid, nome) {
+    logAcessosUid  = uid;
+    logAcessosNome = nome;
     document.getElementById('log-acessos-nome').textContent = nome;
+    // Limpa filtros de data
+    const de  = document.getElementById('log-de');
+    const ate = document.getElementById('log-ate');
+    if (de)  de.value  = '';
+    if (ate) ate.value = '';
+    abrirModal('modal-log-acessos');
+    await _carregarLogAcessos();
+}
+
+async function _carregarLogAcessos() {
     document.getElementById('log-acessos-corpo').innerHTML =
         '<p style="text-align:center;color:var(--text-dim);padding:30px">Carregando…</p>';
-    abrirModal('modal-log-acessos');
 
-    const res = await api(`/api/usuarios/${uid}/acessos`);
+    const de  = document.getElementById('log-de')?.value  || '';
+    const ate = document.getElementById('log-ate')?.value || '';
+    let url = `/api/usuarios/${logAcessosUid}/acessos`;
+    const params = [];
+    if (de)  params.push(`de=${de}`);
+    if (ate) params.push(`ate=${ate}`);
+    if (params.length) url += '?' + params.join('&');
+
+    const res = await api(url);
     const corpo = document.getElementById('log-acessos-corpo');
     if (!res.ok) { corpo.innerHTML = '<p style="color:var(--error);padding:20px">Erro ao carregar.</p>'; return; }
     const logs = await res.json();
     if (!logs.length) {
-        corpo.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:30px">Nenhum acesso registrado.</p>';
+        corpo.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:30px">Nenhum acesso no período.</p>';
         return;
     }
     corpo.innerHTML = logs.map(l => `
@@ -1267,7 +1294,6 @@ async function abrirLogAcessos(uid, nome) {
                 <svg width="14" height="14" fill="none" stroke="var(--accent)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 <span style="font-size:14px">${l.data_hora}</span>
             </div>
-            <span style="font-size:12px;color:var(--text-dim)">IP: ${l.ip}</span>
         </div>`).join('');
 }
 
@@ -1364,6 +1390,124 @@ function imprimirRelatorio() {
     window.print();
     // Restaura após impressão
     setTimeout(() => { document.body.style.overflow = prevOverflow; }, 500);
+}
+
+function exportarRelatorioExcel() {
+    const uid = document.getElementById('relatorio-filtro-usuario')?.value || '';
+    const url = uid ? `/api/relatorio/excel?usuario_id=${uid}` : '/api/relatorio/excel';
+    window.location.href = url;
+}
+
+// ─────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────
+async function carregarDashboard() {
+    const res = await api('/api/dashboard');
+    if (!res.ok) return;
+    const d = await res.json();
+
+    const STATUS_COR = {
+        'Não iniciado': '#94a3b8', 'Iniciado': '#3b82f6', 'Em andamento': '#8b5cf6',
+        'Pausado': '#f59e0b', 'Aguardo retorno': '#f97316', 'Finalizado': '#22c55e'
+    };
+
+    document.getElementById('dash-total').textContent      = d.total;
+    document.getElementById('dash-pendentes').textContent  = d.pendentes;
+    document.getElementById('dash-finalizadas').textContent = d.finalizadas;
+    document.getElementById('dash-alta').textContent       = d.alta_prioridade;
+
+    // Barras de status
+    const barras = document.getElementById('dash-barras');
+    barras.innerHTML = Object.entries(d.por_status).map(([s, n]) => {
+        const pct = d.total > 0 ? Math.round((n / d.total) * 100) : 0;
+        return `
+        <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                <span style="color:${STATUS_COR[s]};font-weight:600">${s}</span>
+                <span style="color:var(--text-dim)">${n} (${pct}%)</span>
+            </div>
+            <div style="height:8px;background:var(--surface2);border-radius:999px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${STATUS_COR[s]};border-radius:999px;transition:width 0.6s ease"></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Tarefas recentes
+    const recentes = document.getElementById('dash-recentes');
+    recentes.innerHTML = d.recentes.length ? d.recentes.map(t => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="navTo('tarefas')">
+            <span style="font-size:11px;color:var(--text-dim);min-width:40px">#${String(t.codigo).padStart(4,'0')}</span>
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</span>
+            <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap">${t.status}</span>
+        </div>`).join('') : '<p style="color:var(--text-dim);font-size:13px">Nenhuma tarefa.</p>';
+
+    // Gráfico de criações por dia (SVG simples)
+    const maxVal = Math.max(...d.criacoes_por_dia.map(x => x.total), 1);
+    const labels = d.criacoes_por_dia;
+    const grafH  = 80;
+    const grafW  = 460;
+    const barW   = Math.floor(grafW / labels.length) - 3;
+    const svgBars = labels.map((item, i) => {
+        const h = item.total > 0 ? Math.max(4, Math.round((item.total / maxVal) * grafH)) : 2;
+        const x = i * (barW + 3);
+        return `<g>
+            <rect x="${x}" y="${grafH - h}" width="${barW}" height="${h}" rx="3"
+                  fill="${item.total > 0 ? 'var(--accent)' : 'var(--border)'}" opacity="0.85"/>
+            ${item.total > 0 ? `<text x="${x + barW/2}" y="${grafH - h - 4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${item.total}</text>` : ''}
+            <text x="${x + barW/2}" y="${grafH + 12}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${item.dia}</text>
+        </g>`;
+    }).join('');
+    document.getElementById('dash-grafico').innerHTML =
+        `<svg viewBox="0 0 ${grafW} ${grafH + 18}" width="100%" preserveAspectRatio="none">${svgBars}</svg>`;
+}
+
+// ─────────────────────────────────────────
+// LIXEIRA
+// ─────────────────────────────────────────
+async function carregarLixeira() {
+    const res = await api('/api/tarefas/lixeira');
+    if (!res.ok) return;
+    const tarefas = await res.json();
+    const container = document.getElementById('lixeira-list');
+    if (!tarefas.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px">🗑️ Lixeira vazia.</p>';
+        return;
+    }
+    container.innerHTML = tarefas.map(t => {
+        const podPermanente = isMaster() || t.criado_por === usuarioLogado.id;
+        return `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px">
+            <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                    <span style="font-size:11px;color:var(--text-dim)">#${String(t.codigo).padStart(4,'0')}</span>
+                    <span style="font-size:11px;color:var(--yellow)">🗑️ Excluída em ${escapar(t.deletado_em || '')}</span>
+                </div>
+                <p style="margin:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0">
+                <button class="btn-ghost btn-sm" onclick="restaurarTarefa(${t.codigo})">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Restaurar
+                </button>
+                ${podPermanente ? `<button class="btn-icon" onclick="excluirPermanente(${t.codigo})" style="color:var(--red)" title="Excluir permanentemente">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                </button>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function restaurarTarefa(codigo) {
+    const res = await api(`/api/tarefas/${codigo}/restaurar`, 'POST');
+    if (res.ok) { toast('✅ Tarefa restaurada!', 'success'); carregarLixeira(); }
+    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+}
+
+async function excluirPermanente(codigo) {
+    if (!confirm('Excluir permanentemente? Esta ação não pode ser desfeita.')) return;
+    const res = await api(`/api/tarefas/${codigo}/permanente`, 'DELETE');
+    if (res.ok) { toast('Tarefa excluída permanentemente', 'success'); carregarLixeira(); }
+    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
 }
 
 

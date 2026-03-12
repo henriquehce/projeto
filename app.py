@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, session, redirect
+from flask import Flask, jsonify, request, render_template, session, redirect, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import urllib.request
@@ -12,13 +12,13 @@ import os
 import threading
 import uuid
 import mimetypes
+import io
 from werkzeug.utils import secure_filename
 
 # Fuso horário Brasil (UTC-3)
 BR_TZ = timezone(timedelta(hours=-3))
 
 def agora_br():
-    """Retorna datetime atual no fuso horário do Brasil."""
     return datetime.now(BR_TZ).replace(tzinfo=None)
 
 try:
@@ -48,13 +48,11 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Upload config — Supabase Storage
-SUPABASE_URL    = os.environ.get('SUPABASE_URL', '')        # ex: https://xxxx.supabase.co
-SUPABASE_KEY    = os.environ.get('SUPABASE_SERVICE_KEY', '') # service_role key (não a anon)
+SUPABASE_URL    = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY    = os.environ.get('SUPABASE_SERVICE_KEY', '')
 SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET', 'anexos-taskflow')
-app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB
+app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 
-# URL pública do sistema — usada nos links dos emails
 APP_URL = os.environ.get('APP_URL', 'https://projeto-zvam.onrender.com')
 
 EXTENSOES_PERMITIDAS = {
@@ -64,20 +62,20 @@ EXTENSOES_PERMITIDAS = {
     'mp4', 'mov', 'avi'
 }
 
+STATUSES_VALIDOS    = ['Não iniciado', 'Iniciado', 'Em andamento', 'Pausado', 'Aguardo retorno', 'Finalizado']
+PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
+
 db   = SQLAlchemy(app)
 CORS(app)
 
 # ─────────────────────────────────────────
-# TABELA ASSOCIATIVA — responsaveis (colaborativos)
+# TABELAS ASSOCIATIVAS
 # ─────────────────────────────────────────
 tarefa_responsaveis = db.Table('tarefa_responsaveis',
     db.Column('tarefa_codigo', db.Integer, db.ForeignKey('tarefas.codigo'), primary_key=True),
     db.Column('usuario_id',    db.Integer, db.ForeignKey('usuarios.id'),    primary_key=True)
 )
 
-# ─────────────────────────────────────────
-# TABELA ASSOCIATIVA — admins colaboradores na tarefa
-# ─────────────────────────────────────────
 tarefa_admins = db.Table('tarefa_admins',
     db.Column('tarefa_codigo', db.Integer, db.ForeignKey('tarefas.codigo'), primary_key=True),
     db.Column('usuario_id',    db.Integer, db.ForeignKey('usuarios.id'),    primary_key=True)
@@ -87,13 +85,8 @@ from flask_migrate import Migrate
 migrate = Migrate(app, db)
 
 # ─────────────────────────────────────────
-# PERFIS
-# Tipos: 'Admin Master', 'Administrador', 'Colaborativo'
-# Admin Master  → vê TODAS as tarefas da empresa, cria outros Admin Masters
-# Administrador → vê APENAS suas proprias tarefas
-# Colaborativo  → vê apenas tarefas atribuidas a ele
+# VALIDAÇÃO
 # ─────────────────────────────────────────
-
 def validar_senha_forte(senha):
     if len(senha) < 8:
         return False, 'A senha deve ter pelo menos 8 caracteres'
@@ -106,7 +99,6 @@ def validar_senha_forte(senha):
     if not re.search(r'[!@#$%^&*(),.?\":{}|<>\-_=+\[\]\\;\'`~/]', senha):
         return False, 'A senha deve conter pelo menos 1 caractere especial (!@#$%^&* etc.)'
     return True, None
-
 
 # ─────────────────────────────────────────
 # MODELOS
@@ -163,6 +155,7 @@ class Tarefa(db.Model):
     compartilhada  = db.Column(db.Boolean, default=True)
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     empresa        = db.Column(db.String(150), nullable=True)
+    deletado_em    = db.Column(db.DateTime, nullable=True)   # soft delete
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
                                      backref=db.backref('tarefas_responsavel', lazy=True),
                                      foreign_keys=[tarefa_responsaveis.c.tarefa_codigo,
@@ -179,7 +172,6 @@ class Tarefa(db.Model):
                                      order_by='ChecklistItem.ordem')
 
     def to_dict(self, viewer_id=None):
-        # Calcula badges de perspectiva do viewer
         delegada = False
         comigo   = False
         if viewer_id is not None:
@@ -189,7 +181,6 @@ class Tarefa(db.Model):
                 delegada = True
             if viewer_id in resp_ids or viewer_id in admin_colab_ids:
                 comigo = True
-
         return {
             'codigo':        self.codigo,
             'descricao':     self.descricao,
@@ -201,6 +192,7 @@ class Tarefa(db.Model):
             'empresa':       self.empresa or '',
             'delegada':      delegada,
             'comigo':        comigo,
+            'deletado_em':   self.deletado_em.strftime('%d/%m/%Y %H:%M') if self.deletado_em else None,
             'responsaveis':  [
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao, 'setor': u.setor or ''}
                 for u in self.responsaveis
@@ -209,9 +201,9 @@ class Tarefa(db.Model):
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao}
                 for u in self.admins_colabs
             ],
-            'anexos_count': len(self.anexos),
-            'checklist_total':     len(self.checklist),
-            'checklist_concluidos': sum(1 for i in self.checklist if i.concluido)
+            'anexos_count':           len(self.anexos),
+            'checklist_total':        len(self.checklist),
+            'checklist_concluidos':   sum(1 for i in self.checklist if i.concluido)
         }
 
 
@@ -237,18 +229,17 @@ class Comentario(db.Model):
 
 class Anexo(db.Model):
     __tablename__ = 'anexos'
-    id           = db.Column(db.Integer, primary_key=True)
-    id_tarefa    = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
-    id_usuario   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    id            = db.Column(db.Integer, primary_key=True)
+    id_tarefa     = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
+    id_usuario    = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     nome_original = db.Column(db.String(255), nullable=False)
-    nome_arquivo = db.Column(db.String(255), nullable=False)  # UUID filename on disk
-    tamanho      = db.Column(db.Integer, nullable=False)      # bytes
-    mime_type    = db.Column(db.String(100), nullable=True)
-    data_upload  = db.Column(db.DateTime, default=agora_br)
-    uploader     = db.relationship('Usuario', foreign_keys=[id_usuario])
+    nome_arquivo  = db.Column(db.String(255), nullable=False)
+    tamanho       = db.Column(db.Integer, nullable=False)
+    mime_type     = db.Column(db.String(100), nullable=True)
+    data_upload   = db.Column(db.DateTime, default=agora_br)
+    uploader      = db.relationship('Usuario', foreign_keys=[id_usuario])
 
     def to_dict(self):
-        # url_download: se tiver URL do Supabase usa ela direto, senão usa rota local (legado)
         url = self.nome_arquivo if self.nome_arquivo.startswith('http') else f'/api/anexos/{self.id}/download'
         return {
             'id':            self.id,
@@ -263,48 +254,41 @@ class Anexo(db.Model):
 
 class ChecklistItem(db.Model):
     __tablename__ = 'checklist_items'
-    id           = db.Column(db.Integer, primary_key=True)
-    id_tarefa    = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
-    texto        = db.Column(db.String(500), nullable=False)
-    ordem        = db.Column(db.Integer, default=0)
-    concluido    = db.Column(db.Boolean, default=False)
-    observacao   = db.Column(db.Text, nullable=True)           # preenchida ao marcar
+    id            = db.Column(db.Integer, primary_key=True)
+    id_tarefa     = db.Column(db.Integer, db.ForeignKey('tarefas.codigo'), nullable=False)
+    texto         = db.Column(db.String(500), nullable=False)
+    ordem         = db.Column(db.Integer, default=0)
+    concluido     = db.Column(db.Boolean, default=False)
+    observacao    = db.Column(db.Text, nullable=True)
     concluido_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     concluido_em  = db.Column(db.DateTime, nullable=True)
-    criado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    criado_em    = db.Column(db.DateTime, default=agora_br)
-    autor        = db.relationship('Usuario', foreign_keys=[criado_por])
-    executor     = db.relationship('Usuario', foreign_keys=[concluido_por])
+    criado_por    = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    criado_em     = db.Column(db.DateTime, default=agora_br)
+    autor         = db.relationship('Usuario', foreign_keys=[criado_por])
+    executor      = db.relationship('Usuario', foreign_keys=[concluido_por])
 
     def to_dict(self):
         return {
-            'id':             self.id,
-            'texto':          self.texto,
-            'ordem':          self.ordem,
-            'concluido':      self.concluido,
-            'observacao':     self.observacao or '',
+            'id':                 self.id,
+            'texto':              self.texto,
+            'ordem':              self.ordem,
+            'concluido':          self.concluido,
+            'observacao':         self.observacao or '',
             'concluido_por_nome': self.executor.nome if self.executor else None,
-            'concluido_em':   self.concluido_em.strftime('%d/%m/%Y %H:%M') if self.concluido_em else None,
-            'criado_por_nome': self.autor.nome if self.autor else None,
+            'concluido_em':       self.concluido_em.strftime('%d/%m/%Y %H:%M') if self.concluido_em else None,
+            'criado_por_nome':    self.autor.nome if self.autor else None,
         }
 
 
-# ─────────────────────────────────────────
-# LOG DE ACESSO
-# ─────────────────────────────────────────
 class LogAcesso(db.Model):
     __tablename__ = 'log_acessos'
     id         = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     data_hora  = db.Column(db.DateTime, default=agora_br)
-    ip         = db.Column(db.String(50), nullable=True)
     usuario    = db.relationship('Usuario', backref='acessos')
 
     def to_dict(self):
-        return {
-            'data_hora': self.data_hora.strftime('%d/%m/%Y %H:%M:%S'),
-            'ip':        self.ip or '—'
-        }
+        return {'data_hora': self.data_hora.strftime('%d/%m/%Y %H:%M:%S')}
 
 
 # ─────────────────────────────────────────
@@ -320,11 +304,9 @@ def _enviar_async(destinatarios, assunto, corpo_html):
         'subject':     assunto,
         'htmlContent': corpo_html
     }
-    # CC opcional — adicione EMAIL_CC=email1@x.com,email2@y.com no .env ou Render
     email_cc = os.environ.get('EMAIL_CC', '')
     if email_cc:
         body['cc'] = [{'email': e.strip()} for e in email_cc.split(',') if e.strip()]
-
     payload = _json.dumps(body).encode('utf-8')
     req = urllib.request.Request(
         'https://api.brevo.com/v3/smtp/email',
@@ -340,9 +322,7 @@ def _enviar_async(destinatarios, assunto, corpo_html):
 
 
 def enviar_email(destinatarios, assunto, corpo_html):
-    if not os.environ.get('BREVO_API_KEY'):
-        return
-    if not destinatarios:
+    if not os.environ.get('BREVO_API_KEY') or not destinatarios:
         return
     t = threading.Thread(target=_enviar_async, args=(destinatarios, assunto, corpo_html))
     t.daemon = True
@@ -370,7 +350,6 @@ def _template_base(titulo, conteudo):
 
 
 def _emails_envolvidos_tarefa(tarefa, excluir_id=None):
-    """Retorna set de emails de todos os envolvidos: responsaveis + admins colabs + admin criador."""
     emails = set()
     for u in tarefa.responsaveis:
         if u.id != excluir_id:
@@ -422,7 +401,6 @@ def email_tarefa_atribuida(tarefa, responsaveis_novos, admin_nome):
 
 
 def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
-    """Notifica todos os envolvidos (responsaveis + admins colabs + admin criador), exceto quem comentou."""
     envolvidos = _emails_envolvidos_tarefa(tarefa, excluir_id=autor_id)
     if not envolvidos:
         return
@@ -439,7 +417,6 @@ def email_comentario_adicionado(tarefa, comentario_texto, autor_nome, autor_id):
 
 
 def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nome, alterado_por_id):
-    """Notifica todos os envolvidos sobre mudanca de status, exceto quem alterou."""
     emails = list(_emails_envolvidos_tarefa(tarefa, excluir_id=alterado_por_id))
     if not emails:
         return
@@ -462,8 +439,33 @@ def email_status_alterado(tarefa, status_anterior, status_novo, alterado_por_nom
 # ─────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────
+def usuario_atual():
+    """Retorna o usuário logado na sessão."""
+    return db.session.get(Usuario, session['usuario_id'])
+
+
+def verificar_empresa(admin, alvo):
+    """Retorna True se o admin NÃO tem permissão sobre o alvo (empresa diferente)."""
+    return bool(admin.empresa and alvo.empresa != admin.empresa)
+
+
+def safe_commit():
+    """Commit com rollback automático em caso de erro."""
+    try:
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        print(f'[DB] Erro no commit: {e}')
+        return False
+
+
 def registrar_historico(id_tarefa, id_usuario, texto):
     db.session.add(Comentario(id_tarefa=id_tarefa, id_usuario=id_usuario, texto=texto, tipo='historico'))
+
+
+def registrar_acesso(uid):
+    db.session.add(LogAcesso(usuario_id=uid))
 
 
 # ─────────────────────────────────────────
@@ -479,12 +481,11 @@ def login_required(f):
 
 
 def admin_required(f):
-    """Permite Administrador e Admin Master."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'usuario_id' not in session:
             return jsonify({'erro': 'Nao autenticado'}), 401
-        u = db.session.get(Usuario, session['usuario_id'])
+        u = usuario_atual()
         if not u or not u.is_admin():
             return jsonify({'erro': 'Acesso negado. Apenas administradores.'}), 403
         return f(*args, **kwargs)
@@ -492,12 +493,11 @@ def admin_required(f):
 
 
 def master_required(f):
-    """Permite apenas Admin Master."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'usuario_id' not in session:
             return jsonify({'erro': 'Nao autenticado'}), 401
-        u = db.session.get(Usuario, session['usuario_id'])
+        u = usuario_atual()
         if not u or not u.is_master():
             return jsonify({'erro': 'Acesso negado. Apenas Admin Master.'}), 403
         return f(*args, **kwargs)
@@ -522,15 +522,13 @@ def login():
     senha = dados.get('senha', '')
     if not email or not senha:
         return jsonify({'erro': 'E-mail e senha sao obrigatorios'}), 400
-    usuario = Usuario.query.filter_by(email=email).first()
-    if not usuario or not usuario.verificar_senha(senha):
+    u = Usuario.query.filter_by(email=email).first()
+    if not u or not u.verificar_senha(senha):
         return jsonify({'erro': 'E-mail ou senha incorretos'}), 401
-    session['usuario_id'] = usuario.id
-    # Registra log de acesso
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
-    db.session.add(LogAcesso(usuario_id=usuario.id, ip=ip))
-    db.session.commit()
-    return jsonify(usuario.to_dict()), 200
+    session['usuario_id'] = u.id
+    registrar_acesso(u.id)
+    safe_commit()
+    return jsonify(u.to_dict()), 200
 
 
 @app.route('/api/logout', methods=['POST'])
@@ -542,10 +540,9 @@ def logout():
 @app.route('/api/me', methods=['GET'])
 @login_required
 def me():
-    u = db.session.get(Usuario, session['usuario_id'])
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
-    db.session.add(LogAcesso(usuario_id=u.id, ip=ip))
-    db.session.commit()
+    u = usuario_atual()
+    registrar_acesso(u.id)
+    safe_commit()
     return jsonify(u.to_dict()), 200
 
 
@@ -555,7 +552,7 @@ def me():
 @app.route('/api/trocar-senha', methods=['POST'])
 @login_required
 def trocar_senha():
-    dados = request.json
+    dados       = request.json
     senha_atual = dados.get('senha_atual', '')
     senha_nova  = dados.get('senha_nova', '')
     senha_conf  = dados.get('senha_confirmacao', '')
@@ -566,12 +563,12 @@ def trocar_senha():
         return jsonify({'erro': erro}), 400
     if senha_nova != senha_conf:
         return jsonify({'erro': 'A confirmacao de senha nao confere'}), 400
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if not usuario.verificar_senha(senha_atual):
+    u = usuario_atual()
+    if not u.verificar_senha(senha_atual):
         return jsonify({'erro': 'Senha atual incorreta'}), 401
-    usuario.definir_senha(senha_nova)
-    usuario.trocar_senha = False
-    db.session.commit()
+    u.definir_senha(senha_nova)
+    u.trocar_senha = False
+    safe_commit()
     return jsonify({'mensagem': 'Senha alterada com sucesso!'}), 200
 
 
@@ -585,30 +582,25 @@ def trocar_email():
         return jsonify({'erro': 'Preencha todos os campos'}), 400
     if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_novo):
         return jsonify({'erro': 'E-mail inválido'}), 400
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if not usuario.verificar_senha(senha):
+    u = usuario_atual()
+    if not u.verificar_senha(senha):
         return jsonify({'erro': 'Senha incorreta'}), 401
-    # Verifica se email já está em uso por outro usuário
-    existente = Usuario.query.filter(
-        Usuario.email == email_novo,
-        Usuario.id != usuario.id
-    ).first()
-    if existente:
+    if Usuario.query.filter(Usuario.email == email_novo, Usuario.id != u.id).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 409
-    usuario.email = email_novo
+    u.email = email_novo
     session['usuario_email'] = email_novo
-    db.session.commit()
+    safe_commit()
     return jsonify({'mensagem': 'E-mail alterado com sucesso!'}), 200
 
 
 @app.route('/api/usuarios/<int:uid>/redefinir-senha', methods=['POST'])
 @admin_required
 def redefinir_senha(uid):
-    admin   = db.session.get(Usuario, session['usuario_id'])
+    admin   = usuario_atual()
     usuario = db.session.get(Usuario, uid)
     if not usuario:
         return jsonify({'erro': 'Usuario nao encontrado'}), 404
-    if admin.empresa and usuario.empresa != admin.empresa:
+    if verificar_empresa(admin, usuario):
         return jsonify({'erro': 'Acesso negado'}), 403
     nova_senha = request.json.get('senha_nova', '')
     valida, erro = validar_senha_forte(nova_senha)
@@ -616,7 +608,7 @@ def redefinir_senha(uid):
         return jsonify({'erro': erro}), 400
     usuario.definir_senha(nova_senha)
     usuario.trocar_senha = True
-    db.session.commit()
+    safe_commit()
     return jsonify({'mensagem': f'Senha de {usuario.nome} redefinida.'}), 200
 
 
@@ -626,37 +618,49 @@ def redefinir_senha(uid):
 @app.route('/api/usuarios', methods=['GET'])
 @login_required
 def listar_usuarios():
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if usuario.empresa:
-        usuarios = Usuario.query.filter_by(empresa=usuario.empresa).all()
-    else:
-        usuarios = Usuario.query.all()
-    return jsonify([u.to_dict() for u in usuarios])
+    u = usuario_atual()
+    q = Usuario.query
+    if u.empresa:
+        q = q.filter_by(empresa=u.empresa)
+    usuarios = q.all()
+    # Conta tarefas ativas (não deletadas) por usuário
+    from sqlalchemy import func
+    codigos_resp = db.session.query(
+        tarefa_responsaveis.c.usuario_id,
+        func.count(tarefa_responsaveis.c.tarefa_codigo).label('total')
+    ).join(Tarefa, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)\
+     .filter(Tarefa.deletado_em == None, Tarefa.status != 'Finalizado')\
+     .group_by(tarefa_responsaveis.c.usuario_id).all()
+    contagem = {row.usuario_id: row.total for row in codigos_resp}
+    result = []
+    for usr in usuarios:
+        d = usr.to_dict()
+        d['tarefas_ativas'] = contagem.get(usr.id, 0)
+        result.append(d)
+    return jsonify(result)
 
 
 @app.route('/api/usuarios/colaborativos', methods=['GET'])
 @login_required
 def listar_colaborativos():
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if usuario.empresa:
-        lista = Usuario.query.filter_by(tipo_perfil='Colaborativo', empresa=usuario.empresa).all()
-    else:
-        lista = Usuario.query.filter_by(tipo_perfil='Colaborativo').all()
-    return jsonify([u.to_dict() for u in lista])
+    u = usuario_atual()
+    q = Usuario.query.filter_by(tipo_perfil='Colaborativo')
+    if u.empresa:
+        q = q.filter_by(empresa=u.empresa)
+    return jsonify([x.to_dict() for x in q.all()])
 
 
 @app.route('/api/usuarios/admins', methods=['GET'])
 @admin_required
 def listar_admins():
-    """Lista admins disponiveis para colaborar em tarefas (exceto o proprio logado)."""
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    query = Usuario.query.filter(
+    u = usuario_atual()
+    q = Usuario.query.filter(
         Usuario.tipo_perfil.in_(['Administrador', 'Admin Master']),
-        Usuario.id != usuario.id
+        Usuario.id != u.id
     )
-    if usuario.empresa:
-        query = query.filter_by(empresa=usuario.empresa)
-    return jsonify([u.to_dict() for u in query.all()])
+    if u.empresa:
+        q = q.filter_by(empresa=u.empresa)
+    return jsonify([x.to_dict() for x in q.all()])
 
 
 @app.route('/api/usuarios', methods=['POST'])
@@ -666,29 +670,20 @@ def criar_usuario():
     for campo in ['nome', 'funcao', 'email', 'tipo_perfil', 'senha']:
         if not dados.get(campo):
             return jsonify({'erro': f'Campo "{campo}" obrigatorio'}), 400
-
     perfis_validos = ['Colaborativo', 'Administrador', 'Admin Master']
     if dados['tipo_perfil'] not in perfis_validos:
         return jsonify({'erro': 'tipo_perfil invalido'}), 400
-
-    # Somente Admin Master pode criar outro Admin Master
-    criador = db.session.get(Usuario, session['usuario_id'])
+    criador = usuario_atual()
     if dados['tipo_perfil'] == 'Admin Master' and not criador.is_master():
         return jsonify({'erro': 'Apenas Admin Master pode criar outros Admin Masters'}), 403
-
-    # Admin Master so pode ser criado pelo email especifico
     if dados['tipo_perfil'] == 'Admin Master' and criador.email != ADMIN_MASTER_EMAIL:
         return jsonify({'erro': 'Apenas o Admin Master principal pode criar outros Admin Masters'}), 403
-
     valida, erro = validar_senha_forte(dados['senha'])
     if not valida:
         return jsonify({'erro': erro}), 400
-
     if Usuario.query.filter_by(email=dados['email'].lower()).first():
         return jsonify({'erro': 'E-mail ja cadastrado'}), 409
-
     empresa = criador.empresa or dados.get('empresa') or None
-
     novo = Usuario(
         nome=dados['nome'], funcao=dados['funcao'],
         email=dados['email'].lower(), tipo_perfil=dados['tipo_perfil'],
@@ -697,142 +692,220 @@ def criar_usuario():
     )
     novo.definir_senha(dados['senha'])
     db.session.add(novo)
-    db.session.commit()
+    safe_commit()
     return jsonify(novo.to_dict()), 201
 
 
 @app.route('/api/usuarios/<int:uid>', methods=['PUT'])
 @master_required
 def editar_usuario(uid):
-    admin   = db.session.get(Usuario, session['usuario_id'])
+    admin   = usuario_atual()
     usuario = db.session.get(Usuario, uid)
     if not usuario:
         return jsonify({'erro': 'Usuario nao encontrado'}), 404
-    if admin.empresa and usuario.empresa != admin.empresa:
+    if verificar_empresa(admin, usuario):
         return jsonify({'erro': 'Acesso negado'}), 403
-
     dados = request.json
-
     if 'nome'   in dados: usuario.nome   = dados['nome'].strip()
     if 'funcao' in dados: usuario.funcao = dados['funcao'].strip()
     if 'setor'  in dados: usuario.setor  = dados['setor'].strip() or None
     if 'empresa' in dados and not admin.empresa:
         usuario.empresa = dados['empresa'].strip() or None
-
-    # Mudanca de perfil: apenas Admin Master pode alterar, e nao pode rebaixar outro Master
     if 'tipo_perfil' in dados:
         novo_perfil = dados['tipo_perfil']
-        perfis_validos = ['Colaborativo', 'Administrador', 'Admin Master']
-        if novo_perfil not in perfis_validos:
+        if novo_perfil not in ['Colaborativo', 'Administrador', 'Admin Master']:
             return jsonify({'erro': 'tipo_perfil invalido'}), 400
-        # Somente o email principal pode promover/criar Admin Master
         if novo_perfil == 'Admin Master' and admin.email != ADMIN_MASTER_EMAIL:
             return jsonify({'erro': 'Apenas o Admin Master principal pode promover outros a Admin Master'}), 403
-        # Nao pode rebaixar o Admin Master principal
         if usuario.email == ADMIN_MASTER_EMAIL and novo_perfil != 'Admin Master':
             return jsonify({'erro': 'Nao e possivel alterar o perfil do Admin Master principal'}), 403
         usuario.tipo_perfil = novo_perfil
-
-    db.session.commit()
+    safe_commit()
     return jsonify(usuario.to_dict()), 200
 
 
 @app.route('/api/usuarios/<int:uid>', methods=['DELETE'])
 @admin_required
 def excluir_usuario(uid):
-    admin   = db.session.get(Usuario, session['usuario_id'])
+    admin   = usuario_atual()
     usuario = db.session.get(Usuario, uid)
     if not usuario:
         return jsonify({'erro': 'Usuario nao encontrado'}), 404
     if usuario.id == session['usuario_id']:
         return jsonify({'erro': 'Voce nao pode excluir a si mesmo'}), 400
-    if admin.empresa and usuario.empresa != admin.empresa:
+    if verificar_empresa(admin, usuario):
         return jsonify({'erro': 'Acesso negado'}), 403
-    # Admin normal nao pode excluir Admin Master
     if usuario.is_master() and not admin.is_master():
         return jsonify({'erro': 'Apenas Admin Master pode excluir outro Admin Master'}), 403
     db.session.delete(usuario)
-    db.session.commit()
+    safe_commit()
     return jsonify({'mensagem': 'Usuario excluido'}), 200
 
 
 @app.route('/api/usuarios/<int:uid>/acessos', methods=['GET'])
 @admin_required
 def listar_acessos(uid):
-    admin = db.session.get(Usuario, session['usuario_id'])
+    admin   = usuario_atual()
     usuario = db.session.get(Usuario, uid)
     if not usuario:
         return jsonify({'erro': 'Usuario nao encontrado'}), 404
-    if admin.empresa and usuario.empresa != admin.empresa:
+    if verificar_empresa(admin, usuario):
         return jsonify({'erro': 'Acesso negado'}), 403
-    logs = (LogAcesso.query
-            .filter_by(usuario_id=uid)
-            .order_by(LogAcesso.data_hora.desc())
-            .limit(50).all())
+
+    # Filtro por período opcional: ?de=2024-01-01&ate=2024-01-31
+    de_str  = request.args.get('de')
+    ate_str = request.args.get('ate')
+    q = LogAcesso.query.filter_by(usuario_id=uid)
+    if de_str:
+        try:
+            q = q.filter(LogAcesso.data_hora >= datetime.strptime(de_str, '%Y-%m-%d'))
+        except ValueError:
+            pass
+    if ate_str:
+        try:
+            ate = datetime.strptime(ate_str, '%Y-%m-%d') + timedelta(days=1)
+            q = q.filter(LogAcesso.data_hora < ate)
+        except ValueError:
+            pass
+    logs = q.order_by(LogAcesso.data_hora.desc()).limit(200).all()
     return jsonify([l.to_dict() for l in logs]), 200
 
 
 @app.route('/api/setores', methods=['GET'])
 @login_required
 def listar_setores():
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    query   = db.session.query(Usuario.setor).filter(Usuario.setor.isnot(None))
-    if usuario.empresa:
-        query = query.filter(Usuario.empresa == usuario.empresa)
+    u     = usuario_atual()
+    query = db.session.query(Usuario.setor).filter(Usuario.setor.isnot(None))
+    if u.empresa:
+        query = query.filter(Usuario.empresa == u.empresa)
     setores = sorted(set(row[0] for row in query.all() if row[0]))
     return jsonify(setores)
 
 
 # ─────────────────────────────────────────
+# DASHBOARD
+# ─────────────────────────────────────────
+@app.route('/api/dashboard', methods=['GET'])
+@login_required
+def dashboard():
+    u       = usuario_atual()
+    empresa = u.empresa
+    uid     = u.id
+
+    # Query base igual ao listar_tarefas mas sem deletados
+    if u.is_master():
+        q = Tarefa.query.filter(
+            db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == uid),
+            Tarefa.deletado_em == None
+        )
+        if empresa:
+            q = q.filter(Tarefa.empresa == empresa)
+    elif u.is_admin():
+        q = Tarefa.query.filter(
+            db.or_(
+                Tarefa.criado_por == uid,
+                Tarefa.codigo.in_(db.session.query(tarefa_admins.c.tarefa_codigo).filter(tarefa_admins.c.usuario_id == uid)),
+                Tarefa.codigo.in_(db.session.query(tarefa_responsaveis.c.tarefa_codigo).filter(tarefa_responsaveis.c.usuario_id == uid))
+            ),
+            Tarefa.deletado_em == None
+        )
+        if empresa:
+            q = q.filter(Tarefa.empresa == empresa)
+    else:
+        q = Tarefa.query.join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)\
+            .filter(tarefa_responsaveis.c.usuario_id == uid, Tarefa.deletado_em == None)
+        if empresa:
+            q = q.filter(Tarefa.empresa == empresa)
+
+    tarefas = q.all()
+    total = len(tarefas)
+
+    por_status = {}
+    for s in STATUSES_VALIDOS:
+        por_status[s] = sum(1 for t in tarefas if t.status == s)
+
+    alta_prioridade = sum(1 for t in tarefas if t.prioridade == 'Alta' and t.status != 'Finalizado')
+
+    # Últimas 7 tarefas criadas (mais recentes)
+    recentes = sorted(tarefas, key=lambda t: t.codigo, reverse=True)[:5]
+
+    # Criações por dia nos últimos 14 dias
+    hoje = agora_br().date()
+    criacoes_por_dia = {}
+    for i in range(13, -1, -1):
+        d = (hoje - timedelta(days=i)).strftime('%d/%m')
+        criacoes_por_dia[d] = 0
+    for t in tarefas:
+        d = t.data_criacao.strftime('%d/%m')
+        if d in criacoes_por_dia:
+            criacoes_por_dia[d] += 1
+
+    return jsonify({
+        'total':            total,
+        'por_status':       por_status,
+        'alta_prioridade':  alta_prioridade,
+        'finalizadas':      por_status.get('Finalizado', 0),
+        'pendentes':        total - por_status.get('Finalizado', 0),
+        'recentes':         [{'codigo': t.codigo, 'descricao': t.descricao, 'status': t.status, 'prioridade': t.prioridade} for t in recentes],
+        'criacoes_por_dia': [{'dia': k, 'total': v} for k, v in criacoes_por_dia.items()]
+    })
+
+
+# ─────────────────────────────────────────
 # TAREFAS
 # ─────────────────────────────────────────
-STATUSES_VALIDOS    = ['Não iniciado', 'Iniciado', 'Em andamento', 'Pausado', 'Aguardo retorno', 'Finalizado']
-PRIORIDADES_VALIDAS = ['Nenhuma', 'Alta']
-
-
 @app.route('/api/tarefas', methods=['GET'])
 @login_required
 def listar_tarefas():
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    empresa = usuario.empresa
-    uid     = usuario.id
+    u       = usuario_atual()
+    empresa = u.empresa
+    uid     = u.id
 
-    if usuario.is_master():
-        # Admin Master: ve TODAS as tarefas da empresa
-        query = Tarefa.query.filter(
-            db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == uid)
+    if u.is_master():
+        q = Tarefa.query.filter(
+            db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == uid),
+            Tarefa.deletado_em == None
         )
         if empresa:
-            query = query.filter(Tarefa.empresa == empresa)
-
-    elif usuario.is_admin():
-        # Administrador: suas proprias + admin colab + onde foi adicionado como responsavel
-        query = Tarefa.query.filter(
+            q = q.filter(Tarefa.empresa == empresa)
+    elif u.is_admin():
+        q = Tarefa.query.filter(
             db.or_(
                 Tarefa.criado_por == uid,
-                Tarefa.codigo.in_(
-                    db.session.query(tarefa_admins.c.tarefa_codigo)
-                    .filter(tarefa_admins.c.usuario_id == uid)
-                ),
-                Tarefa.codigo.in_(
-                    db.session.query(tarefa_responsaveis.c.tarefa_codigo)
-                    .filter(tarefa_responsaveis.c.usuario_id == uid)
-                )
-            )
+                Tarefa.codigo.in_(db.session.query(tarefa_admins.c.tarefa_codigo).filter(tarefa_admins.c.usuario_id == uid)),
+                Tarefa.codigo.in_(db.session.query(tarefa_responsaveis.c.tarefa_codigo).filter(tarefa_responsaveis.c.usuario_id == uid))
+            ),
+            Tarefa.deletado_em == None
         )
         if empresa:
-            query = query.filter(Tarefa.empresa == empresa)
-
+            q = q.filter(Tarefa.empresa == empresa)
     else:
-        # Colaborativo: tarefas atribuidas a ele
-        query = (Tarefa.query
-                 .join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)
-                 .filter(tarefa_responsaveis.c.usuario_id == uid))
+        q = Tarefa.query.join(tarefa_responsaveis, Tarefa.codigo == tarefa_responsaveis.c.tarefa_codigo)\
+            .filter(tarefa_responsaveis.c.usuario_id == uid, Tarefa.deletado_em == None)
         if empresa:
-            query = query.filter(Tarefa.empresa == empresa)
+            q = q.filter(Tarefa.empresa == empresa)
 
-    tarefas = query.order_by(Tarefa.codigo.desc()).all()
+    tarefas = q.order_by(Tarefa.codigo.desc()).all()
     return jsonify([t.to_dict(viewer_id=uid) for t in tarefas])
+
+
+@app.route('/api/tarefas/lixeira', methods=['GET'])
+@admin_required
+def listar_lixeira():
+    admin   = usuario_atual()
+    empresa = admin.empresa
+    if admin.is_master():
+        q = Tarefa.query.filter(Tarefa.deletado_em != None)
+        if empresa:
+            q = q.filter(Tarefa.empresa == empresa)
+    else:
+        uid = admin.id
+        q = Tarefa.query.filter(
+            Tarefa.criado_por == uid,
+            Tarefa.deletado_em != None
+        )
+    tarefas = q.order_by(Tarefa.deletado_em.desc()).all()
+    return jsonify([t.to_dict(viewer_id=admin.id) for t in tarefas])
 
 
 @app.route('/api/tarefas', methods=['POST'])
@@ -841,28 +914,20 @@ def criar_tarefa():
     dados = request.json
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descricao obrigatoria'}), 400
-
     prioridade = dados.get('prioridade', 'Nenhuma')
     if prioridade not in PRIORIDADES_VALIDAS:
         return jsonify({'erro': 'Prioridade invalida'}), 400
-
-    admin   = db.session.get(Usuario, session['usuario_id'])
+    admin   = usuario_atual()
     empresa = admin.empresa
-
     uids_resp = dados.get('responsaveis_ids', [])
     uids_adm  = dados.get('admins_ids', [])
-
-    # Compartilhada SOMENTE se tiver responsável colaborativo
     compartilhada = len(uids_resp) > 0
-
     nova = Tarefa(
         descricao=dados['descricao'], prioridade=prioridade,
         compartilhada=compartilhada, criado_por=session['usuario_id'], empresa=empresa
     )
     db.session.add(nova)
     db.session.flush()
-
-    # Responsaveis colaborativos
     responsaveis_novos = []
     nomes = []
     for uid in uids_resp:
@@ -871,24 +936,16 @@ def criar_tarefa():
             nova.responsaveis.append(u)
             responsaveis_novos.append(u)
             nomes.append(u.nome)
-
-    # Admins colaboradores — se adicionados, tarefa vira compartilhada
     for uid in uids_adm:
         u = db.session.get(Usuario, uid)
         if u and u.is_admin() and u.id != admin.id and (not empresa or u.empresa == empresa):
             nova.admins_colabs.append(u)
             if not nova.compartilhada:
                 nova.compartilhada = True
-
     msg = f'Tarefa criada por {admin.nome}.'
-    if nomes:
-        msg += f' Responsaveis: {", ".join(nomes)}.'
-    else:
-        msg += ' Tarefa pessoal.'
-
+    msg += f' Responsaveis: {", ".join(nomes)}.' if nomes else ' Tarefa pessoal.'
     registrar_historico(nova.codigo, session['usuario_id'], msg)
-    db.session.commit()
-
+    safe_commit()
     email_tarefa_criada(nova, responsaveis_novos, admin.nome, admin.email)
     return jsonify(nova.to_dict()), 201
 
@@ -897,59 +954,83 @@ def criar_tarefa():
 @admin_required
 def excluir_tarefa(codigo):
     tarefa = db.session.get(Tarefa, codigo)
-    admin  = db.session.get(Usuario, session['usuario_id'])
+    admin  = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
+        return jsonify({'erro': 'Tarefa nao encontrada'}), 404
+    if admin.empresa and tarefa.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    # Soft delete
+    tarefa.deletado_em = agora_br()
+    registrar_historico(codigo, session['usuario_id'], f'Tarefa movida para lixeira por {admin.nome}.')
+    safe_commit()
+    return jsonify({'mensagem': f'Tarefa #{codigo} movida para lixeira'}), 200
+
+
+@app.route('/api/tarefas/<int:codigo>/restaurar', methods=['POST'])
+@admin_required
+def restaurar_tarefa(codigo):
+    tarefa = db.session.get(Tarefa, codigo)
+    admin  = usuario_atual()
+    if not tarefa or not tarefa.deletado_em:
+        return jsonify({'erro': 'Tarefa nao encontrada na lixeira'}), 404
+    if admin.empresa and tarefa.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    tarefa.deletado_em = None
+    registrar_historico(codigo, session['usuario_id'], f'Tarefa restaurada da lixeira por {admin.nome}.')
+    safe_commit()
+    return jsonify({'mensagem': f'Tarefa #{codigo} restaurada'}), 200
+
+
+@app.route('/api/tarefas/<int:codigo>/permanente', methods=['DELETE'])
+@admin_required
+def excluir_permanente(codigo):
+    tarefa = db.session.get(Tarefa, codigo)
+    admin  = usuario_atual()
     if not tarefa:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    # Admin normal so pode excluir suas proprias tarefas
     if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
         return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(tarefa)
-    db.session.commit()
-    return jsonify({'mensagem': f'Tarefa #{codigo} excluida'}), 200
+    safe_commit()
+    return jsonify({'mensagem': f'Tarefa #{codigo} excluida permanentemente'}), 200
 
 
 @app.route('/api/tarefas/<int:codigo>/status', methods=['PATCH'])
 @login_required
 def atualizar_status(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    usuario = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado — empresa diferente'}), 403
-    # Colaborativo: so pode alterar se for responsavel
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in [u.id for u in tarefa.responsaveis]:
         return jsonify({'erro': 'Acesso negado — você não é responsável desta tarefa'}), 403
-    # Admin normal: so pode alterar suas proprias tarefas ou onde e admin colab
     if usuario.tipo_perfil == 'Administrador':
         ids_admins_colabs = [u.id for u in tarefa.admins_colabs]
-        print(f'[STATUS] usuario={usuario.id} criado_por={tarefa.criado_por} admins_colabs={ids_admins_colabs}')
         if tarefa.criado_por != usuario.id and usuario.id not in ids_admins_colabs:
-            return jsonify({'erro': f'Acesso negado — você não é criador nem admin colaborador desta tarefa'}), 403
-
+            return jsonify({'erro': 'Acesso negado — você não é criador nem admin colaborador desta tarefa'}), 403
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
         return jsonify({'erro': 'Status invalido'}), 400
-
     anterior = tarefa.status
-
-    # Bloqueia retorno para "Não iniciado" se já teve progresso
     if novo_status == 'Não iniciado' and anterior != 'Não iniciado':
         registrar_historico(codigo, session['usuario_id'],
             f'{usuario.nome} tentou reverter o status para "Não iniciado" (bloqueado — tarefa já foi iniciada).')
-        db.session.commit()
+        safe_commit()
         return jsonify({'erro': 'Não é possível reverter para "Não iniciado" após a tarefa ser iniciada.', 'bloqueado': True}), 400
-
     tarefa.status = novo_status
     registrar_historico(codigo, session['usuario_id'],
         f'Status alterado de "{anterior}" para "{novo_status}" por {usuario.nome}.')
-    db.session.commit()
-
+    safe_commit()
     if anterior != novo_status:
         email_status_alterado(tarefa, anterior, novo_status, usuario.nome, usuario.id)
-
     return jsonify(tarefa.to_dict()), 200
 
 
@@ -957,8 +1038,8 @@ def atualizar_status(codigo):
 @admin_required
 def atualizar_prioridade(codigo):
     tarefa = db.session.get(Tarefa, codigo)
-    admin  = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    admin  = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
@@ -968,7 +1049,7 @@ def atualizar_prioridade(codigo):
     if nova not in PRIORIDADES_VALIDAS:
         return jsonify({'erro': 'Prioridade invalida'}), 400
     tarefa.prioridade = nova
-    db.session.commit()
+    safe_commit()
     return jsonify(tarefa.to_dict()), 200
 
 
@@ -976,17 +1057,15 @@ def atualizar_prioridade(codigo):
 @admin_required
 def atualizar_responsaveis(codigo):
     tarefa = db.session.get(Tarefa, codigo)
-    admin  = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    admin  = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
     if not admin.is_master() and tarefa.criado_por != admin.id:
         return jsonify({'erro': 'Acesso negado'}), 403
-
     ids_antes = {u.id for u in tarefa.responsaveis}
     empresa   = admin.empresa
-
     tarefa.responsaveis.clear()
     nomes_depois = []
     responsaveis_novos = []
@@ -997,36 +1076,30 @@ def atualizar_responsaveis(codigo):
             nomes_depois.append(u.nome)
             if u.id not in ids_antes:
                 responsaveis_novos.append(u)
-
     ids_depois = {u.id for u in tarefa.responsaveis}
-    # Só registra log se houve mudança real
     if ids_antes != ids_depois:
         nomes_antes_str = ', '.join(
             db.session.get(Usuario, i).nome for i in ids_antes if db.session.get(Usuario, i)
         ) or 'nenhum'
         registrar_historico(codigo, session['usuario_id'],
             f'Responsaveis alterados por {admin.nome}. Antes: {nomes_antes_str}. Agora: {", ".join(nomes_depois) or "nenhum"}.')
-    db.session.commit()
-
+    safe_commit()
     if responsaveis_novos:
         email_tarefa_atribuida(tarefa, responsaveis_novos, admin.nome)
-
     return jsonify(tarefa.to_dict()), 200
 
 
 @app.route('/api/tarefas/<int:codigo>/admins', methods=['PUT'])
 @admin_required
 def atualizar_admins_colab(codigo):
-    """Atualiza a lista de admins colaboradores de uma tarefa."""
     tarefa = db.session.get(Tarefa, codigo)
-    admin  = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    admin  = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
     if not admin.is_master() and tarefa.criado_por != admin.id:
         return jsonify({'erro': 'Acesso negado'}), 403
-
     empresa = admin.empresa
     ids_admins_antes = {u.id for u in tarefa.admins_colabs}
     tarefa.admins_colabs.clear()
@@ -1036,20 +1109,15 @@ def atualizar_admins_colab(codigo):
         if u and u.is_admin() and u.id != admin.id and (not empresa or u.empresa == empresa):
             tarefa.admins_colabs.append(u)
             nomes.append(u.nome)
-
-    # Se há admins colaboradores, a tarefa precisa ser compartilhada para eles verem
     if nomes and not tarefa.compartilhada:
         tarefa.compartilhada = True
-    # Se removeu todos os admins colabs E não tem responsáveis, volta a ser pessoal
     elif not nomes and not tarefa.responsaveis:
         tarefa.compartilhada = False
-
     ids_admins_depois = {u.id for u in tarefa.admins_colabs}
-    # Só registra log se houve mudança real
     if ids_admins_antes != ids_admins_depois:
         registrar_historico(codigo, session['usuario_id'],
             f'Admins colaboradores atualizados por {admin.nome}: {", ".join(nomes) or "nenhum"}.')
-    db.session.commit()
+    safe_commit()
     return jsonify(tarefa.to_dict()), 200
 
 
@@ -1061,8 +1129,7 @@ def atualizar_admins_colab(codigo):
 def listar_comentarios(codigo):
     if not db.session.get(Tarefa, codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
-    comentarios = (Comentario.query.filter_by(id_tarefa=codigo)
-                   .order_by(Comentario.data_hora.asc()).all())
+    comentarios = Comentario.query.filter_by(id_tarefa=codigo).order_by(Comentario.data_hora.asc()).all()
     return jsonify([c.to_dict() for c in comentarios])
 
 
@@ -1070,29 +1137,24 @@ def listar_comentarios(codigo):
 @login_required
 def adicionar_comentario(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    usuario = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-
-    # Verifica acesso
-    ids_resp       = [u.id for u in tarefa.responsaveis]
-    ids_adm_colab  = [u.id for u in tarefa.admins_colabs]
+    ids_resp      = [u.id for u in tarefa.responsaveis]
+    ids_adm_colab = [u.id for u in tarefa.admins_colabs]
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in ids_resp:
         return jsonify({'erro': 'Acesso negado'}), 403
     if usuario.tipo_perfil == 'Administrador':
         if tarefa.criado_por != usuario.id and usuario.id not in ids_adm_colab:
             return jsonify({'erro': 'Acesso negado'}), 403
-
     texto = request.json.get('texto', '').strip()
     if not texto:
         return jsonify({'erro': 'Comentario nao pode ser vazio'}), 400
-
     novo = Comentario(id_tarefa=codigo, id_usuario=session['usuario_id'], texto=texto, tipo='comentario')
     db.session.add(novo)
-    db.session.commit()
-
+    safe_commit()
     email_comentario_adicionado(tarefa, texto, usuario.nome, usuario.id)
     return jsonify(novo.to_dict()), 201
 
@@ -1109,48 +1171,38 @@ def formatar_tamanho(b):
     return f'{b/1024**2:.1f} MB'
 
 def supabase_upload(file_bytes, nome_arquivo, mime_type):
-    """Faz upload para o Supabase Storage e retorna (sucesso, url_publica)."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return False, 'Supabase não configurado'
     url = f'{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{nome_arquivo}'
     req = urllib.request.Request(
         url, data=file_bytes,
-        headers={
-            'Authorization': f'Bearer {SUPABASE_KEY}',
-            'Content-Type': mime_type,
-            'x-upsert': 'true'
-        },
+        headers={'Authorization': f'Bearer {SUPABASE_KEY}', 'Content-Type': mime_type, 'x-upsert': 'true'},
         method='POST'
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            url_publica = f'{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{nome_arquivo}'
-            return True, url_publica
+        with urllib.request.urlopen(req, timeout=30):
+            return True, f'{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{nome_arquivo}'
     except Exception as e:
         return False, str(e)
 
 def supabase_delete(nome_arquivo):
-    """Remove arquivo do Supabase Storage."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return
-    url = f'{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{nome_arquivo}'
     req = urllib.request.Request(
-        url, headers={'Authorization': f'Bearer {SUPABASE_KEY}'}, method='DELETE'
+        f'{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{nome_arquivo}',
+        headers={'Authorization': f'Bearer {SUPABASE_KEY}'}, method='DELETE'
     )
     try:
         urllib.request.urlopen(req, timeout=10)
     except Exception as e:
         print(f'[STORAGE] Erro ao deletar {nome_arquivo}: {e}')
 
-def supabase_url_publica(nome_arquivo):
-    return f'{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{nome_arquivo}'
-
 
 @app.route('/api/tarefas/<int:codigo>/anexos', methods=['GET'])
 @login_required
 def listar_anexos(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
-    usuario = db.session.get(Usuario, session['usuario_id'])
+    usuario = usuario_atual()
     if not tarefa:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
@@ -1162,61 +1214,47 @@ def listar_anexos(codigo):
 @login_required
 def upload_anexo(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    usuario = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-
     if 'arquivo' not in request.files:
         return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
     arquivo = request.files['arquivo']
-    if arquivo.filename == '':
-        return jsonify({'erro': 'Nome de arquivo vazio'}), 400
-    if not extensao_permitida(arquivo.filename):
+    if not arquivo.filename or not extensao_permitida(arquivo.filename):
         return jsonify({'erro': 'Tipo de arquivo não permitido'}), 400
-
     nome_original = arquivo.filename
-    ext           = nome_original.rsplit('.', 1)[1].lower() if '.' in nome_original else ''
-    # Nome no storage: nome-original_uuid-curto.ext  ex: relatorio-vendas_b90421d0.pdf
-    nome_base = nome_original.rsplit('.', 1)[0] if '.' in nome_original else nome_original
-    nome_base = re.sub(r'[^\w\-]', '_', nome_base)[:40]  # sanitiza, máx 40 chars
-    uid_curto = uuid.uuid4().hex[:8]
-    nome_uuid = f'{nome_base}_{uid_curto}.{ext}' if ext else f'{nome_base}_{uid_curto}'
-    mime_type     = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
-    file_bytes    = arquivo.read()
-    tamanho       = len(file_bytes)
-
-    # Upload para Supabase Storage
+    ext       = nome_original.rsplit('.', 1)[1].lower() if '.' in nome_original else ''
+    nome_base = re.sub(r'[^\w\-]', '_', nome_original.rsplit('.', 1)[0])[:40]
+    nome_uuid = f'{nome_base}_{uuid.uuid4().hex[:8]}.{ext}' if ext else f'{nome_base}_{uuid.uuid4().hex[:8]}'
+    mime_type = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
+    file_bytes = arquivo.read()
     ok, resultado = supabase_upload(file_bytes, nome_uuid, mime_type)
     if not ok:
         return jsonify({'erro': f'Erro no upload: {resultado}'}), 500
-
-    # Salva a URL pública no banco (campo nome_arquivo)
     novo = Anexo(
         id_tarefa=codigo, id_usuario=session['usuario_id'],
-        nome_original=nome_original, nome_arquivo=resultado,  # URL pública
-        tamanho=tamanho, mime_type=mime_type
+        nome_original=nome_original, nome_arquivo=resultado,
+        tamanho=len(file_bytes), mime_type=mime_type
     )
     db.session.add(novo)
     registrar_historico(codigo, session['usuario_id'],
-        f'{usuario.nome} anexou o arquivo "{nome_original}" ({formatar_tamanho(tamanho)}).')
-    db.session.commit()
+        f'{usuario.nome} anexou o arquivo "{nome_original}" ({formatar_tamanho(len(file_bytes))}).')
+    safe_commit()
     return jsonify(novo.to_dict()), 201
 
 
 @app.route('/api/anexos/<int:aid>/download', methods=['GET'])
 @login_required
 def download_anexo(aid):
-    """Rota legado — redireciona para URL pública do Supabase."""
     anexo   = db.session.get(Anexo, aid)
-    usuario = db.session.get(Usuario, session['usuario_id'])
+    usuario = usuario_atual()
     if not anexo:
         return jsonify({'erro': 'Anexo não encontrado'}), 404
     tarefa = db.session.get(Tarefa, anexo.id_tarefa)
     if usuario.empresa and tarefa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    # Se nome_arquivo for URL do Supabase, redireciona
     if anexo.nome_arquivo.startswith('http'):
         return redirect(anexo.nome_arquivo)
     return jsonify({'erro': 'Arquivo não disponível'}), 404
@@ -1226,25 +1264,18 @@ def download_anexo(aid):
 @login_required
 def excluir_anexo(aid):
     anexo   = db.session.get(Anexo, aid)
-    usuario = db.session.get(Usuario, session['usuario_id'])
+    usuario = usuario_atual()
     if not anexo:
         return jsonify({'erro': 'Anexo não encontrado'}), 404
     tarefa = db.session.get(Tarefa, anexo.id_tarefa)
-    pode = (
-        anexo.id_usuario == usuario.id or
-        (tarefa and tarefa.criado_por == usuario.id) or
-        usuario.is_master()
-    )
-    if not pode:
+    if not (anexo.id_usuario == usuario.id or (tarefa and tarefa.criado_por == usuario.id) or usuario.is_master()):
         return jsonify({'erro': 'Acesso negado'}), 403
-    # Remove do Supabase Storage
     if anexo.nome_arquivo.startswith('http'):
-        nome_arq = anexo.nome_arquivo.split(f'/{SUPABASE_BUCKET}/')[-1]
-        supabase_delete(nome_arq)
+        supabase_delete(anexo.nome_arquivo.split(f'/{SUPABASE_BUCKET}/')[-1])
     registrar_historico(anexo.id_tarefa, session['usuario_id'],
         f'{usuario.nome} removeu o anexo "{anexo.nome_original}".')
     db.session.delete(anexo)
-    db.session.commit()
+    safe_commit()
     return jsonify({'mensagem': 'Anexo excluído'}), 200
 
 
@@ -1254,73 +1285,45 @@ def excluir_anexo(aid):
 @app.route('/api/relatorio/pendencias', methods=['GET'])
 @admin_required
 def relatorio_pendencias():
-    admin   = db.session.get(Usuario, session['usuario_id'])
-    empresa = admin.empresa
-    filtro_uid = request.args.get('usuario_id', type=int)  # opcional
+    admin      = usuario_atual()
+    empresa    = admin.empresa
+    filtro_uid = request.args.get('usuario_id', type=int)
 
-    # Tarefas não finalizadas, filtradas por empresa
-    query = Tarefa.query.filter(Tarefa.status != 'Finalizado')
+    q = Tarefa.query.filter(Tarefa.status != 'Finalizado', Tarefa.deletado_em == None)
     if empresa:
-        query = query.filter(Tarefa.empresa == empresa)
-
-    # Admin normal: só suas tarefas
+        q = q.filter(Tarefa.empresa == empresa)
     if not admin.is_master():
         uid = admin.id
-        query = query.filter(
-            db.or_(
-                Tarefa.criado_por == uid,
-                Tarefa.codigo.in_(
-                    db.session.query(tarefa_admins.c.tarefa_codigo)
-                    .filter(tarefa_admins.c.usuario_id == uid)
-                ),
-                Tarefa.codigo.in_(
-                    db.session.query(tarefa_responsaveis.c.tarefa_codigo)
-                    .filter(tarefa_responsaveis.c.usuario_id == uid)
-                )
-            )
-        )
+        q = q.filter(db.or_(
+            Tarefa.criado_por == uid,
+            Tarefa.codigo.in_(db.session.query(tarefa_admins.c.tarefa_codigo).filter(tarefa_admins.c.usuario_id == uid)),
+            Tarefa.codigo.in_(db.session.query(tarefa_responsaveis.c.tarefa_codigo).filter(tarefa_responsaveis.c.usuario_id == uid))
+        ))
 
-    tarefas_pendentes = query.order_by(Tarefa.codigo.desc()).all()
-
-    # Agrupa por responsável
+    tarefas_pendentes = q.order_by(Tarefa.codigo.desc()).all()
     por_usuario = {}
 
     for t in tarefas_pendentes:
         if not t.compartilhada:
             continue
         ids_resp = [u.id for u in t.responsaveis]
-        # Tarefas sem responsável: atribui ao criador
-        if not ids_resp:
-            criador = db.session.get(Usuario, t.criado_por)
-            if criador:
-                uid = criador.id
-                if uid not in por_usuario:
-                    por_usuario[uid] = {'usuario': criador.to_dict(), 'tarefas': []}
-                por_usuario[uid]['tarefas'].append({
-                    'codigo': t.codigo,
-                    'descricao': t.descricao,
-                    'status': t.status,
-                    'prioridade': t.prioridade,
-                    'data_criacao': t.data_criacao.strftime('%d/%m/%Y'),
-                    'sem_responsavel': True
-                })
-        else:
-            for u in t.responsaveis:
-                uid = u.id
-                if uid not in por_usuario:
-                    por_usuario[uid] = {'usuario': u.to_dict(), 'tarefas': []}
-                por_usuario[uid]['tarefas'].append({
-                    'codigo': t.codigo,
-                    'descricao': t.descricao,
-                    'status': t.status,
-                    'prioridade': t.prioridade,
-                    'data_criacao': t.data_criacao.strftime('%d/%m/%Y'),
-                    'sem_responsavel': False
-                })
+        alvos = [db.session.get(Usuario, t.criado_por)] if not ids_resp else list(t.responsaveis)
+        for u in alvos:
+            if not u:
+                continue
+            uid = u.id
+            if uid not in por_usuario:
+                por_usuario[uid] = {'usuario': u.to_dict(), 'tarefas': []}
+            por_usuario[uid]['tarefas'].append({
+                'codigo':         t.codigo,
+                'descricao':      t.descricao,
+                'status':         t.status,
+                'prioridade':     t.prioridade,
+                'data_criacao':   t.data_criacao.strftime('%d/%m/%Y'),
+                'sem_responsavel': not ids_resp
+            })
 
-    # Ordena por nome do usuário, e dentro por prioridade (Alta primeiro)
     resultado = sorted(por_usuario.values(), key=lambda x: x['usuario']['nome'])
-    # Aplica filtro por usuário específico se solicitado
     if filtro_uid:
         resultado = [r for r in resultado if r['usuario']['id'] == filtro_uid]
     for item in resultado:
@@ -1328,10 +1331,147 @@ def relatorio_pendencias():
         item['total'] = len(item['tarefas'])
 
     return jsonify({
-        'gerado_em': agora_br().strftime('%d/%m/%Y %H:%M'),
+        'gerado_em':    agora_br().strftime('%d/%m/%Y %H:%M'),
         'total_tarefas': len(tarefas_pendentes),
-        'por_usuario': resultado
+        'por_usuario':  resultado
     })
+
+
+# ─────────────────────────────────────────
+# EXPORTAR RELATÓRIO EM EXCEL
+# ─────────────────────────────────────────
+@app.route('/api/relatorio/excel', methods=['GET'])
+@admin_required
+def relatorio_excel():
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return jsonify({'erro': 'openpyxl nao instalado. Adicione ao requirements.txt'}), 500
+
+    admin      = usuario_atual()
+    empresa    = admin.empresa
+    filtro_uid = request.args.get('usuario_id', type=int)
+
+    q = Tarefa.query.filter(Tarefa.status != 'Finalizado', Tarefa.deletado_em == None)
+    if empresa:
+        q = q.filter(Tarefa.empresa == empresa)
+    if not admin.is_master():
+        uid = admin.id
+        q = q.filter(db.or_(
+            Tarefa.criado_por == uid,
+            Tarefa.codigo.in_(db.session.query(tarefa_admins.c.tarefa_codigo).filter(tarefa_admins.c.usuario_id == uid)),
+            Tarefa.codigo.in_(db.session.query(tarefa_responsaveis.c.tarefa_codigo).filter(tarefa_responsaveis.c.usuario_id == uid))
+        ))
+
+    tarefas_pendentes = q.order_by(Tarefa.codigo.desc()).all()
+    por_usuario = {}
+    for t in tarefas_pendentes:
+        if not t.compartilhada:
+            continue
+        ids_resp = [u.id for u in t.responsaveis]
+        alvos = [db.session.get(Usuario, t.criado_por)] if not ids_resp else list(t.responsaveis)
+        for u in alvos:
+            if not u:
+                continue
+            uid = u.id
+            if uid not in por_usuario:
+                por_usuario[uid] = {'usuario': u, 'tarefas': []}
+            por_usuario[uid]['tarefas'].append(t)
+
+    resultado = sorted(por_usuario.values(), key=lambda x: x['usuario'].nome)
+    if filtro_uid:
+        resultado = [r for r in resultado if r['usuario'].id == filtro_uid]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Pendências'
+
+    # Cores
+    COR_HEADER  = 'FF0F172A'
+    COR_PESSOA  = 'FF1E3A5F'
+    COR_ALT     = 'FFF0F4FF'
+    STATUS_COR  = {
+        'Não iniciado': 'FF94a3b8', 'Iniciado': 'FF3b82f6', 'Em andamento': 'FF8b5cf6',
+        'Pausado': 'FFf59e0b', 'Aguardo retorno': 'FFf97316', 'Finalizado': 'FF22c55e'
+    }
+
+    thin = Side(style='thin', color='FFD0D9E8')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # Título
+    ws.merge_cells('A1:F1')
+    titulo_cell = ws['A1']
+    titulo_cell.value = f'Relatório de Pendências — {agora_br().strftime("%d/%m/%Y %H:%M")}'
+    titulo_cell.font  = Font(bold=True, color='FFFFFFFF', size=13)
+    titulo_cell.fill  = PatternFill('solid', fgColor=COR_HEADER)
+    titulo_cell.alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 28
+
+    row = 2
+    colunas = ['#', 'Descrição', 'Status', 'Prioridade', 'Criação', 'Responsável']
+    larguras = [8, 50, 18, 12, 12, 24]
+    for col, (cab, larg) in enumerate(zip(colunas, larguras), 1):
+        ws.column_dimensions[get_column_letter(col)].width = larg
+
+    for item in resultado:
+        u = item['usuario']
+        tarefas = sorted(item['tarefas'], key=lambda t: (0 if t.prioridade == 'Alta' else 1, t.codigo))
+
+        # Linha de pessoa
+        ws.merge_cells(f'A{row}:F{row}')
+        cell = ws[f'A{row}']
+        cell.value = f'  {u.nome}  ·  {u.funcao}{" / " + u.setor if u.setor else ""}  ({len(tarefas)} pendência{"s" if len(tarefas) != 1 else ""})'
+        cell.font  = Font(bold=True, color='FFFFFFFF', size=11)
+        cell.fill  = PatternFill('solid', fgColor=COR_PESSOA)
+        cell.alignment = Alignment(vertical='center')
+        ws.row_dimensions[row].height = 22
+        row += 1
+
+        # Cabeçalho da tabela
+        for col, cab in enumerate(colunas, 1):
+            c = ws.cell(row=row, column=col, value=cab)
+            c.font      = Font(bold=True, color='FF0F172A', size=10)
+            c.fill      = PatternFill('solid', fgColor='FFE2E8F0')
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            c.border    = border
+        ws.row_dimensions[row].height = 18
+        row += 1
+
+        for i, t in enumerate(tarefas):
+            resp_nomes = ', '.join(u2.nome for u2 in t.responsaveis) if t.responsaveis else '—'
+            valores = [
+                f'#{str(t.codigo).zfill(4)}',
+                t.descricao,
+                t.status,
+                t.prioridade,
+                t.data_criacao.strftime('%d/%m/%Y'),
+                resp_nomes
+            ]
+            fill_cor = 'FFFFFFFF' if i % 2 == 0 else COR_ALT
+            for col, val in enumerate(valores, 1):
+                c = ws.cell(row=row, column=col, value=val)
+                c.fill      = PatternFill('solid', fgColor=fill_cor)
+                c.alignment = Alignment(vertical='center', wrap_text=(col == 2))
+                c.border    = border
+                c.font      = Font(size=10)
+                if col == 3:  # Status com cor
+                    cor_st = STATUS_COR.get(t.status, 'FF64748b')
+                    c.font = Font(size=10, color=cor_st, bold=True)
+                if col == 4 and t.prioridade == 'Alta':
+                    c.font = Font(size=10, color='FFef4444', bold=True)
+            ws.row_dimensions[row].height = 16
+            row += 1
+
+        row += 1  # linha em branco entre pessoas
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    nome_arquivo = f'relatorio_pendencias_{agora_br().strftime("%Y%m%d_%H%M")}.xlsx'
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=nome_arquivo)
 
 
 # ─────────────────────────────────────────
@@ -1359,7 +1499,7 @@ def _pode_editar_checklist(usuario, tarefa):
 @login_required
 def listar_checklist(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
-    usuario = db.session.get(Usuario, session['usuario_id'])
+    usuario = usuario_atual()
     if not tarefa:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
@@ -1371,8 +1511,8 @@ def listar_checklist(codigo):
 @login_required
 def adicionar_item_checklist(codigo):
     tarefa  = db.session.get(Tarefa, codigo)
-    usuario = db.session.get(Usuario, session['usuario_id'])
-    if not tarefa:
+    usuario = usuario_atual()
+    if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
@@ -1382,12 +1522,9 @@ def adicionar_item_checklist(codigo):
     if not texto:
         return jsonify({'erro': 'Texto obrigatório'}), 400
     max_ordem = db.session.query(db.func.max(ChecklistItem.ordem)).filter_by(id_tarefa=codigo).scalar() or 0
-    item = ChecklistItem(
-        id_tarefa=codigo, texto=texto,
-        ordem=max_ordem + 1, criado_por=session['usuario_id']
-    )
+    item = ChecklistItem(id_tarefa=codigo, texto=texto, ordem=max_ordem + 1, criado_por=session['usuario_id'])
     db.session.add(item)
-    db.session.commit()
+    safe_commit()
     return jsonify(item.to_dict()), 201
 
 
@@ -1395,7 +1532,7 @@ def adicionar_item_checklist(codigo):
 @login_required
 def remover_item_checklist(item_id):
     item    = db.session.get(ChecklistItem, item_id)
-    usuario = db.session.get(Usuario, session['usuario_id'])
+    usuario = usuario_atual()
     if not item:
         return jsonify({'erro': 'Item não encontrado'}), 404
     tarefa = db.session.get(Tarefa, item.id_tarefa)
@@ -1404,7 +1541,7 @@ def remover_item_checklist(item_id):
     if not _pode_editar_checklist(usuario, tarefa):
         return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(item)
-    db.session.commit()
+    safe_commit()
     return jsonify({'mensagem': 'Item removido'}), 200
 
 
@@ -1412,7 +1549,7 @@ def remover_item_checklist(item_id):
 @login_required
 def marcar_item_checklist(item_id):
     item    = db.session.get(ChecklistItem, item_id)
-    usuario = db.session.get(Usuario, session['usuario_id'])
+    usuario = usuario_atual()
     if not item:
         return jsonify({'erro': 'Item não encontrado'}), 404
     tarefa = db.session.get(Tarefa, item.id_tarefa)
@@ -1427,7 +1564,7 @@ def marcar_item_checklist(item_id):
     item.observacao    = observacao if concluido else None
     item.concluido_por = session['usuario_id'] if concluido else None
     item.concluido_em  = agora_br() if concluido else None
-    db.session.commit()
+    safe_commit()
     return jsonify(item.to_dict()), 200
 
 
