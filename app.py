@@ -543,6 +543,9 @@ def logout():
 @login_required
 def me():
     u = db.session.get(Usuario, session['usuario_id'])
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+    db.session.add(LogAcesso(usuario_id=u.id, ip=ip))
+    db.session.commit()
     return jsonify(u.to_dict()), 200
 
 
