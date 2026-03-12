@@ -156,6 +156,7 @@ class Tarefa(db.Model):
     criado_por     = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     empresa        = db.Column(db.String(150), nullable=True)
     deletado_em    = db.Column(db.DateTime, nullable=True)   # soft delete
+    deletado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
                                      backref=db.backref('tarefas_responsavel', lazy=True),
                                      foreign_keys=[tarefa_responsaveis.c.tarefa_codigo,
@@ -193,6 +194,7 @@ class Tarefa(db.Model):
             'delegada':      delegada,
             'comigo':        comigo,
             'deletado_em':   self.deletado_em.strftime('%d/%m/%Y %H:%M') if self.deletado_em else None,
+            'deletado_por':  self.deletado_por,
             'responsaveis':  [
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao, 'setor': u.setor or ''}
                 for u in self.responsaveis
@@ -792,7 +794,12 @@ def dashboard():
     empresa = u.empresa
     uid     = u.id
 
-    # Query base igual ao listar_tarefas mas sem deletados
+    # Filtros opcionais
+    filtro_status   = request.args.get('status')       # ex: "Iniciado"
+    filtro_uid_resp = request.args.get('usuario_id', type=int)  # responsável
+    filtro_periodo  = request.args.get('periodo', '14', type=str)  # dias: 7, 14, 30, 90
+
+    # Query base sem deletados
     if u.is_master():
         q = Tarefa.query.filter(
             db.or_(Tarefa.compartilhada == True, Tarefa.criado_por == uid),
@@ -817,37 +824,92 @@ def dashboard():
         if empresa:
             q = q.filter(Tarefa.empresa == empresa)
 
-    tarefas = q.all()
-    total = len(tarefas)
+    todas_tarefas = q.all()
+
+    # Aplica filtro de responsável (para totais filtrados)
+    def tem_responsavel(t, resp_uid):
+        return any(r.id == resp_uid for r in t.responsaveis)
+
+    tarefas_filtradas = todas_tarefas
+    if filtro_uid_resp:
+        tarefas_filtradas = [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)]
+    if filtro_status:
+        tarefas_filtradas = [t for t in tarefas_filtradas if t.status == filtro_status]
+
+    total = len(tarefas_filtradas)
 
     por_status = {}
     for s in STATUSES_VALIDOS:
-        por_status[s] = sum(1 for t in tarefas if t.status == s)
+        por_status[s] = sum(1 for t in tarefas_filtradas if t.status == s)
 
-    alta_prioridade = sum(1 for t in tarefas if t.prioridade == 'Alta' and t.status != 'Finalizado')
+    alta_prioridade = sum(1 for t in tarefas_filtradas if t.prioridade == 'Alta' and t.status != 'Finalizado')
 
-    # Últimas 7 tarefas criadas (mais recentes)
-    recentes = sorted(tarefas, key=lambda t: t.codigo, reverse=True)[:5]
+    # Tarefas recentes (sem filtro de status, mas com filtro de usuário)
+    base_recentes = todas_tarefas if not filtro_uid_resp else [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)]
+    recentes = sorted(base_recentes, key=lambda t: t.codigo, reverse=True)[:8]
 
-    # Criações por dia nos últimos 14 dias
+    # Gráfico por período escolhido
+    dias = int(filtro_periodo) if filtro_periodo in ('7','14','30','90') else 14
     hoje = agora_br().date()
     criacoes_por_dia = {}
-    for i in range(13, -1, -1):
+    for i in range(dias - 1, -1, -1):
         d = (hoje - timedelta(days=i)).strftime('%d/%m')
         criacoes_por_dia[d] = 0
-    for t in tarefas:
+    base_graf = todas_tarefas if not filtro_uid_resp else [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)]
+    for t in base_graf:
         d = t.data_criacao.strftime('%d/%m')
         if d in criacoes_por_dia:
             criacoes_por_dia[d] += 1
 
+    # Lista de responsáveis únicos (para o filtro no front)
+    responsaveis_set = {}
+    for t in todas_tarefas:
+        for r in t.responsaveis:
+            if r.id not in responsaveis_set:
+                responsaveis_set[r.id] = r.nome
+    responsaveis_lista = sorted([{'id': k, 'nome': v} for k, v in responsaveis_set.items()], key=lambda x: x['nome'])
+
+    # Por usuário (ranking de pendências) — inclui responsáveis E criadores de tarefas pessoais
+    por_usuario = {}
+    for t in todas_tarefas:
+        if t.status == 'Finalizado':
+            continue
+        ids_resp = [r.id for r in t.responsaveis]
+        if ids_resp:
+            # Tarefa compartilhada — conta para cada responsável
+            for r in t.responsaveis:
+                if filtro_uid_resp and r.id != filtro_uid_resp:
+                    continue
+                if r.id not in por_usuario:
+                    por_usuario[r.id] = {'nome': r.nome, 'total': 0, 'alta': 0, 'id': r.id}
+                por_usuario[r.id]['total'] += 1
+                if t.prioridade == 'Alta':
+                    por_usuario[r.id]['alta'] += 1
+        elif t.criado_por:
+            # Tarefa pessoal — conta para o criador (admin/master)
+            if filtro_uid_resp and t.criado_por != filtro_uid_resp:
+                continue
+            criador = db.session.get(Usuario, t.criado_por)
+            if criador:
+                if criador.id not in por_usuario:
+                    por_usuario[criador.id] = {'nome': criador.nome, 'total': 0, 'alta': 0, 'id': criador.id}
+                por_usuario[criador.id]['total'] += 1
+                if t.prioridade == 'Alta':
+                    por_usuario[criador.id]['alta'] += 1
+    ranking = sorted(por_usuario.values(), key=lambda x: x['total'], reverse=True)[:10]
+
     return jsonify({
-        'total':            total,
-        'por_status':       por_status,
-        'alta_prioridade':  alta_prioridade,
-        'finalizadas':      por_status.get('Finalizado', 0),
-        'pendentes':        total - por_status.get('Finalizado', 0),
-        'recentes':         [{'codigo': t.codigo, 'descricao': t.descricao, 'status': t.status, 'prioridade': t.prioridade} for t in recentes],
-        'criacoes_por_dia': [{'dia': k, 'total': v} for k, v in criacoes_por_dia.items()]
+        'total':             total,
+        'por_status':        por_status,
+        'alta_prioridade':   alta_prioridade,
+        'finalizadas':       por_status.get('Finalizado', 0),
+        'pendentes':         total - por_status.get('Finalizado', 0),
+        'recentes':          [{'codigo': t.codigo, 'descricao': t.descricao, 'status': t.status, 'prioridade': t.prioridade,
+                               'responsaveis': [r.nome for r in t.responsaveis]} for t in recentes],
+        'criacoes_por_dia':  [{'dia': k, 'total': v} for k, v in criacoes_por_dia.items()],
+        'responsaveis_lista': responsaveis_lista,
+        'ranking_pendencias': ranking,
+        'filtros_ativos':    {'status': filtro_status, 'usuario_id': filtro_uid_resp, 'periodo': dias}
     })
 
 
@@ -900,12 +962,18 @@ def listar_lixeira():
             q = q.filter(Tarefa.empresa == empresa)
     else:
         uid = admin.id
-        q = Tarefa.query.filter(
-            Tarefa.criado_por == uid,
-            Tarefa.deletado_em != None
-        )
+        q = Tarefa.query.filter(Tarefa.criado_por == uid, Tarefa.deletado_em != None)
     tarefas = q.order_by(Tarefa.deletado_em.desc()).all()
-    return jsonify([t.to_dict(viewer_id=admin.id) for t in tarefas])
+    result = []
+    for t in tarefas:
+        d = t.to_dict(viewer_id=admin.id)
+        if t.deletado_por:
+            u = db.session.get(Usuario, t.deletado_por)
+            d['deletado_por_nome'] = u.nome if u else 'Desconhecido'
+        else:
+            d['deletado_por_nome'] = None
+        result.append(d)
+    return jsonify(result)
 
 
 @app.route('/api/tarefas', methods=['POST'])
@@ -962,7 +1030,8 @@ def excluir_tarefa(codigo):
     if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
         return jsonify({'erro': 'Acesso negado'}), 403
     # Soft delete
-    tarefa.deletado_em = agora_br()
+    tarefa.deletado_em  = agora_br()
+    tarefa.deletado_por = session['usuario_id']
     registrar_historico(codigo, session['usuario_id'], f'Tarefa movida para lixeira por {admin.nome}.')
     safe_commit()
     return jsonify({'mensagem': f'Tarefa #{codigo} movida para lixeira'}), 200

@@ -206,41 +206,69 @@
             <div class="page-header">
                 <div>
                     <h2 class="page-title">Dashboard</h2>
-                    <p class="page-sub">Visão geral das tarefas</p>
+                    <p class="page-sub">Visão geral · clique nos itens para filtrar</p>
                 </div>
+                <button class="btn-ghost btn-sm" onclick="carregarDashboard(true)" title="Limpar filtros">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Resetar filtros
+                </button>
             </div>
-            <!-- Cards de resumo -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px">
-                <div class="dash-card">
+
+            <!-- Filtros rápidos -->
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+                <select id="dash-filtro-usuario" class="field-select" style="min-width:180px;max-width:240px;font-size:13px;padding:6px 10px" onchange="dashFiltrarUsuarioSelect()">
+                    <option value="">— Todas as pessoas</option>
+                </select>
+                <div style="display:flex;gap:4px">
+                    <button class="dash-periodo-btn active" data-dias="7"  onclick="dashFiltrarPeriodo(7)">7d</button>
+                    <button class="dash-periodo-btn" data-dias="14" onclick="dashFiltrarPeriodo(14)">14d</button>
+                    <button class="dash-periodo-btn" data-dias="30" onclick="dashFiltrarPeriodo(30)">30d</button>
+                    <button class="dash-periodo-btn" data-dias="90" onclick="dashFiltrarPeriodo(90)">90d</button>
+                </div>
+                <div id="dash-filtros-ativos" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
+
+            <!-- Cards de totais (clicáveis para filtrar por status) -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">
+                <div class="dash-card" data-status="" onclick="dashFiltrarStatus(null)" title="Ver todas">
                     <div class="dash-card-label">Total</div>
                     <div class="dash-card-num" id="dash-total">—</div>
                 </div>
-                <div class="dash-card">
-                    <div class="dash-card-label">Pendentes</div>
+                <div class="dash-card" data-status="Não iniciado" onclick="dashFiltrarStatus('Não iniciado')" style="cursor:pointer">
+                    <div class="dash-card-label" style="color:#94a3b8">Não iniciado</div>
+                    <div class="dash-card-num" id="dash-nao-iniciado" style="color:#94a3b8">—</div>
+                </div>
+                <div class="dash-card" data-status="Em andamento" onclick="dashFiltrarStatus('Em andamento')" style="cursor:pointer">
+                    <div class="dash-card-label" style="color:var(--yellow)">Pendentes</div>
                     <div class="dash-card-num" id="dash-pendentes" style="color:var(--yellow)">—</div>
                 </div>
-                <div class="dash-card">
-                    <div class="dash-card-label">Finalizadas</div>
+                <div class="dash-card" data-status="Finalizado" onclick="dashFiltrarStatus('Finalizado')" style="cursor:pointer">
+                    <div class="dash-card-label" style="color:var(--green)">Finalizadas</div>
                     <div class="dash-card-num" id="dash-finalizadas" style="color:var(--green)">—</div>
                 </div>
-                <div class="dash-card">
-                    <div class="dash-card-label">Alta prioridade</div>
+                <div class="dash-card" data-status="" onclick="dashFiltrarStatus(null)" style="cursor:pointer">
+                    <div class="dash-card-label" style="color:var(--red)">Alta prioridade</div>
                     <div class="dash-card-num" id="dash-alta" style="color:var(--red)">—</div>
                 </div>
             </div>
-            <!-- Grid de conteúdo -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+            <!-- Grid principal -->
+            <div class="dash-grid">
                 <div class="dash-panel">
-                    <h4 class="dash-panel-title">Por status</h4>
+                    <h4 class="dash-panel-title">Por status <span style="font-size:10px;font-weight:400;opacity:.6">· clique para filtrar</span></h4>
                     <div id="dash-barras"></div>
                 </div>
                 <div class="dash-panel">
-                    <h4 class="dash-panel-title">5 tarefas mais recentes</h4>
+                    <h4 class="dash-panel-title">Pendências por pessoa <span style="font-size:10px;font-weight:400;opacity:.6">· clique para filtrar</span></h4>
+                    <div id="dash-ranking"></div>
+                </div>
+                <div class="dash-panel dash-panel-full">
+                    <h4 class="dash-panel-title">Tarefas mais recentes <span style="font-size:10px;font-weight:400;opacity:.6">· clique para abrir</span></h4>
                     <div id="dash-recentes"></div>
                 </div>
-                <div class="dash-panel" style="grid-column:1/-1">
-                    <h4 class="dash-panel-title">Criações nos últimos 14 dias</h4>
-                    <div id="dash-grafico" style="padding-top:8px"></div>
+                <div class="dash-panel dash-panel-full">
+                    <h4 class="dash-panel-title">Criações por dia</h4>
+                    <div id="dash-grafico" style="padding-top:6px;overflow-x:auto"></div>
                 </div>
             </div>
         </div>

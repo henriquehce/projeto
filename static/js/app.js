@@ -1401,64 +1401,170 @@ function exportarRelatorioExcel() {
 // ─────────────────────────────────────────
 // DASHBOARD
 // ─────────────────────────────────────────
-async function carregarDashboard() {
-    const res = await api('/api/dashboard');
+const STATUS_COR = {
+    'Não iniciado': '#94a3b8', 'Iniciado': '#3b82f6', 'Em andamento': '#8b5cf6',
+    'Pausado': '#f59e0b', 'Aguardo retorno': '#f97316', 'Finalizado': '#22c55e'
+};
+
+let dashFiltroStatus   = null;
+let dashFiltroUsuario  = null;
+let dashFiltroPeriodo  = '14';
+let dadosDashboard     = null;
+
+async function carregarDashboard(resetFiltros = false) {
+    if (resetFiltros) { dashFiltroStatus = null; dashFiltroUsuario = null; dashFiltroPeriodo = '14'; }
+
+    const params = new URLSearchParams();
+    if (dashFiltroStatus)  params.set('status',     dashFiltroStatus);
+    if (dashFiltroUsuario) params.set('usuario_id', dashFiltroUsuario);
+    if (dashFiltroPeriodo) params.set('periodo',    dashFiltroPeriodo);
+
+    const res = await api('/api/dashboard?' + params.toString());
     if (!res.ok) return;
-    const d = await res.json();
+    dadosDashboard = await res.json();
+    renderDashboard(dadosDashboard);
+}
 
-    const STATUS_COR = {
-        'Não iniciado': '#94a3b8', 'Iniciado': '#3b82f6', 'Em andamento': '#8b5cf6',
-        'Pausado': '#f59e0b', 'Aguardo retorno': '#f97316', 'Finalizado': '#22c55e'
-    };
-
-    document.getElementById('dash-total').textContent      = d.total;
-    document.getElementById('dash-pendentes').textContent  = d.pendentes;
+function renderDashboard(d) {
+    // ── Cards de totais ──────────────────────────────────────
+    document.getElementById('dash-total').textContent       = d.total;
+    document.getElementById('dash-pendentes').textContent   = d.pendentes;
     document.getElementById('dash-finalizadas').textContent = d.finalizadas;
-    document.getElementById('dash-alta').textContent       = d.alta_prioridade;
+    document.getElementById('dash-alta').textContent        = d.alta_prioridade;
 
-    // Barras de status
-    const barras = document.getElementById('dash-barras');
-    barras.innerHTML = Object.entries(d.por_status).map(([s, n]) => {
-        const pct = d.total > 0 ? Math.round((n / d.total) * 100) : 0;
+    // Destaca card ativo
+    document.querySelectorAll('.dash-card[data-status]').forEach(c => {
+        c.classList.toggle('dash-card-active', c.dataset.status === (dashFiltroStatus || ''));
+    });
+
+    // ── Filtro de usuário ────────────────────────────────────
+    const sel = document.getElementById('dash-filtro-usuario');
+    if (sel) {
+        const valorAtual = sel.value;
+        sel.innerHTML = '<option value="">— Todos</option>' +
+            d.responsaveis_lista.map(r =>
+                `<option value="${r.id}" ${String(r.id) === String(dashFiltroUsuario || '') ? 'selected' : ''}>${escapar(r.nome)}</option>`
+            ).join('');
+        if (!dashFiltroUsuario) sel.value = '';
+    }
+
+    // ── Chips de período ─────────────────────────────────────
+    document.querySelectorAll('.dash-periodo-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.dias === String(dashFiltroPeriodo));
+    });
+
+    // ── Barras de status (clicáveis) ─────────────────────────
+    const maxStatus = Math.max(...Object.values(d.por_status), 1);
+    document.getElementById('dash-barras').innerHTML = Object.entries(d.por_status).map(([s, n]) => {
+        const pct    = d.total > 0 ? Math.round((n / d.total) * 100) : 0;
+        const ativo  = dashFiltroStatus === s;
+        const cor    = STATUS_COR[s];
         return `
-        <div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-                <span style="color:${STATUS_COR[s]};font-weight:600">${s}</span>
-                <span style="color:var(--text-dim)">${n} (${pct}%)</span>
+        <div class="dash-barra-row${ativo ? ' dash-barra-ativa' : ''}" onclick="dashFiltrarStatus('${s}')" title="Filtrar por: ${s}">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">
+                <span style="color:${cor};font-weight:600;display:flex;align-items:center;gap:5px">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${cor};display:inline-block;flex-shrink:0"></span>
+                    ${s}
+                </span>
+                <span style="color:var(--text-dim)">${n} <span style="opacity:.6">(${pct}%)</span></span>
             </div>
             <div style="height:8px;background:var(--surface2);border-radius:999px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${STATUS_COR[s]};border-radius:999px;transition:width 0.6s ease"></div>
+                <div style="height:100%;width:${pct}%;background:${cor};border-radius:999px;transition:width 0.5s ease"></div>
             </div>
         </div>`;
     }).join('');
 
-    // Tarefas recentes
-    const recentes = document.getElementById('dash-recentes');
-    recentes.innerHTML = d.recentes.length ? d.recentes.map(t => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="navTo('tarefas')">
+    // ── Ranking de pendências ────────────────────────────────
+    const maxRank = Math.max(...d.ranking_pendencias.map(r => r.total), 1);
+    document.getElementById('dash-ranking').innerHTML = d.ranking_pendencias.length
+        ? d.ranking_pendencias.map((r, i) => {
+            const pct  = Math.round((r.total / maxRank) * 100);
+            const ativo = String(r.id) === String(dashFiltroUsuario || '');
+            return `
+            <div class="dash-ranking-row${ativo ? ' dash-barra-ativa' : ''}" onclick="dashFiltrarUsuario(${r.id})" title="Filtrar por: ${r.nome}">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                    <span style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+                        <span class="resp-avatar" style="width:22px;height:22px;font-size:9px;flex-shrink:0">${iniciais(r.nome)}</span>
+                        ${escapar(r.nome)}
+                    </span>
+                    <span style="font-size:11px;color:var(--text-dim)">${r.total}${r.alta > 0 ? ` <span style="color:var(--red);font-weight:700">↑${r.alta}</span>` : ''}</span>
+                </div>
+                <div style="height:5px;background:var(--surface2);border-radius:999px;overflow:hidden">
+                    <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:999px;transition:width 0.5s ease"></div>
+                </div>
+            </div>`;
+        }).join('')
+        : '<p style="color:var(--text-dim);font-size:13px;padding:8px 0">Nenhuma pendência.</p>';
+
+    // ── Tarefas recentes ─────────────────────────────────────
+    document.getElementById('dash-recentes').innerHTML = d.recentes.length
+        ? d.recentes.map(t => `
+        <div class="dash-recente-row" onclick="dashAbrirTarefa(${t.codigo})" title="Ver tarefa #${t.codigo}">
             <span style="font-size:11px;color:var(--text-dim);min-width:40px">#${String(t.codigo).padStart(4,'0')}</span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</span>
-            <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap">${t.status}</span>
-        </div>`).join('') : '<p style="color:var(--text-dim);font-size:13px">Nenhuma tarefa.</p>';
+            ${t.responsaveis.length ? `<span style="font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis">${escapar(t.responsaveis[0])}${t.responsaveis.length > 1 ? ' +' + (t.responsaveis.length - 1) : ''}</span>` : ''}
+            <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap;min-width:90px;text-align:right">${t.status}</span>
+        </div>`).join('')
+        : '<p style="color:var(--text-dim);font-size:13px">Nenhuma tarefa.</p>';
 
-    // Gráfico de criações por dia (SVG simples)
-    const maxVal = Math.max(...d.criacoes_por_dia.map(x => x.total), 1);
-    const labels = d.criacoes_por_dia;
-    const grafH  = 80;
-    const grafW  = 460;
-    const barW   = Math.floor(grafW / labels.length) - 3;
-    const svgBars = labels.map((item, i) => {
-        const h = item.total > 0 ? Math.max(4, Math.round((item.total / maxVal) * grafH)) : 2;
-        const x = i * (barW + 3);
-        return `<g>
+    // ── Gráfico de barras SVG ────────────────────────────────
+    const grafH  = 90;
+    const grafW  = 560;
+    const items  = d.criacoes_por_dia;
+    const barW   = Math.max(4, Math.floor(grafW / items.length) - 4);
+    const maxGraf = Math.max(...items.map(x => x.total), 1);
+    const svgBars = items.map((item, i) => {
+        const h = item.total > 0 ? Math.max(6, Math.round((item.total / maxGraf) * grafH)) : 3;
+        const x = i * (barW + 4) + 2;
+        const mostrar = items.length <= 14 || i % 2 === 0;
+        return `<g style="cursor:default">
             <rect x="${x}" y="${grafH - h}" width="${barW}" height="${h}" rx="3"
-                  fill="${item.total > 0 ? 'var(--accent)' : 'var(--border)'}" opacity="0.85"/>
+                  fill="${item.total > 0 ? 'var(--accent)' : 'var(--border)'}" opacity="${item.total > 0 ? '0.85' : '0.4'}"/>
             ${item.total > 0 ? `<text x="${x + barW/2}" y="${grafH - h - 4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${item.total}</text>` : ''}
-            <text x="${x + barW/2}" y="${grafH + 12}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${item.dia}</text>
+            ${mostrar ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${item.dia}</text>` : ''}
         </g>`;
     }).join('');
     document.getElementById('dash-grafico').innerHTML =
-        `<svg viewBox="0 0 ${grafW} ${grafH + 18}" width="100%" preserveAspectRatio="none">${svgBars}</svg>`;
+        `<svg viewBox="0 0 ${grafW} ${grafH + 18}" width="100%" preserveAspectRatio="xMidYMid meet" style="overflow:visible">${svgBars}</svg>`;
+
+    // ── Tag de filtros ativos ────────────────────────────────
+    const tags = [];
+    if (dashFiltroStatus)  tags.push(`<span class="dash-filtro-tag" onclick="dashFiltrarStatus(null)">Status: ${dashFiltroStatus} ✕</span>`);
+    if (dashFiltroUsuario) {
+        const u = d.responsaveis_lista.find(r => String(r.id) === String(dashFiltroUsuario));
+        if (u) tags.push(`<span class="dash-filtro-tag" onclick="dashFiltrarUsuario(null)">Pessoa: ${escapar(u.nome)} ✕</span>`);
+    }
+    const tagsEl = document.getElementById('dash-filtros-ativos');
+    if (tagsEl) tagsEl.innerHTML = tags.join('');
+}
+
+function dashFiltrarStatus(status) {
+    dashFiltroStatus = (dashFiltroStatus === status || !status) ? null : status;
+    carregarDashboard();
+}
+
+function dashFiltrarUsuario(uid) {
+    dashFiltroUsuario = (String(dashFiltroUsuario) === String(uid) || !uid) ? null : uid;
+    const sel = document.getElementById('dash-filtro-usuario');
+    if (sel) sel.value = dashFiltroUsuario || '';
+    carregarDashboard();
+}
+
+function dashFiltrarPeriodo(dias) {
+    dashFiltroPeriodo = String(dias);
+    carregarDashboard();
+}
+
+function dashFiltrarUsuarioSelect() {
+    const sel = document.getElementById('dash-filtro-usuario');
+    dashFiltroUsuario = sel?.value ? parseInt(sel.value) : null;
+    carregarDashboard();
+}
+
+function dashAbrirTarefa(codigo) {
+    navTo('tarefas');
+    // Abre comentários da tarefa após carregar
+    carregarTarefas().then ? carregarTarefas().then(() => abrirModalComentarios(codigo)) : null;
 }
 
 // ─────────────────────────────────────────
@@ -1475,12 +1581,16 @@ async function carregarLixeira() {
     }
     container.innerHTML = tarefas.map(t => {
         const podPermanente = isMaster() || t.criado_por === usuarioLogado.id;
+        const quemExcluiu   = t.deletado_por_nome
+            ? `<span style="font-size:11px;color:var(--text-dim)">por <strong>${escapar(t.deletado_por_nome)}</strong></span>`
+            : '';
         return `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px">
             <div style="flex:1;min-width:0">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
                     <span style="font-size:11px;color:var(--text-dim)">#${String(t.codigo).padStart(4,'0')}</span>
-                    <span style="font-size:11px;color:var(--yellow)">🗑️ Excluída em ${escapar(t.deletado_em || '')}</span>
+                    <span style="font-size:11px;color:var(--yellow)">🗑️ ${escapar(t.deletado_em || '')}</span>
+                    ${quemExcluiu}
                 </div>
                 <p style="margin:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</p>
             </div>
