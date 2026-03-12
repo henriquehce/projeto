@@ -1358,7 +1358,12 @@ function renderizarRelatorio(dados) {
 }
 
 function imprimirRelatorio() {
+    // Safari/macOS fix: remove overflow:hidden do body antes de imprimir
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'visible';
     window.print();
+    // Restaura após impressão
+    setTimeout(() => { document.body.style.overflow = prevOverflow; }, 500);
 }
 
 

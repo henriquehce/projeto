@@ -1501,10 +1501,60 @@ body {
 .relatorio-table tbody tr:hover td { background: rgba(255,255,255,0.03); }
 
 @media print {
-    .modal-overlay { position: static !important; background: white !important; }
-    .modal-box { box-shadow: none !important; border: none !important; max-height: none !important; }
-    .modal-header button, #btn-relatorio, .modal-footer { display: none !important; }
+    /* Esconde tudo exceto o relatório */
     body > *:not(#modal-relatorio) { display: none !important; }
+
+    /* Reset completo do modal para impressão */
+    #modal-relatorio {
+        position: static !important;
+        display: block !important;
+        background: white !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        height: auto !important;
+        width: 100% !important;
+    }
+    #modal-relatorio .modal-box {
+        box-shadow: none !important;
+        border: none !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+    }
+    #modal-relatorio .modal-body {
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+    /* Esconde botões e filtros */
+    .modal-header button,
+    .modal-close,
+    #btn-relatorio,
+    .modal-footer,
+    #relatorio-filtro-usuario,
+    #modal-relatorio .modal-header div > button { display: none !important; }
+
+    /* Mantém o título */
+    .modal-header { border-bottom: 1px solid #ddd !important; padding-bottom: 8px !important; }
+
+    /* Cada pessoa em nova página se necessário */
+    .relatorio-pessoa {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        overflow: visible !important;
+    }
+
+    /* Tabela não corta no meio */
+    .relatorio-table { page-break-inside: auto; }
+    .relatorio-table tr { page-break-inside: avoid; break-inside: avoid; }
+
+    /* Cores e background para impressão */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: white !important; }
 }
 
 /* ══════════════════════════════════════
