@@ -599,7 +599,28 @@ function atualizarForcaSenha(inputId, containerId) {
                 <button onclick="fecharModal('modal-relatorio')" class="modal-close">✕</button>
             </div>
         </div>
-        <div class="modal-body" id="relatorio-corpo" style="overflow-y:auto;max-height:calc(90vh - 140px)">
+        <div style="padding:12px 24px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <label style="font-size:13px;color:var(--text-dim);white-space:nowrap">Filtrar por pessoa:</label>
+            <select id="relatorio-filtro-usuario" class="field-select" style="flex:1;min-width:160px;max-width:280px;padding:6px 10px;font-size:13px" onchange="aplicarFiltroRelatorio()">
+                <option value="">— Todos</option>
+            </select>
+        </div>
+        <div class="modal-body" id="relatorio-corpo" style="overflow-y:auto;max-height:calc(90vh - 180px)">
+        </div>
+    </div>
+</div>
+
+<!-- MODAL LOG DE ACESSOS -->
+<div id="modal-log-acessos" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-log-acessos')">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <div>
+                <h3>🕐 Log de Acessos</h3>
+                <p class="modal-subtitle" id="log-acessos-nome"></p>
+            </div>
+            <button onclick="fecharModal('modal-log-acessos')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="log-acessos-corpo" style="max-height:60vh;overflow-y:auto">
         </div>
     </div>
 </div>

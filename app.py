@@ -290,6 +290,24 @@ class ChecklistItem(db.Model):
 
 
 # ─────────────────────────────────────────
+# LOG DE ACESSO
+# ─────────────────────────────────────────
+class LogAcesso(db.Model):
+    __tablename__ = 'log_acessos'
+    id         = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    data_hora  = db.Column(db.DateTime, default=agora_br)
+    ip         = db.Column(db.String(50), nullable=True)
+    usuario    = db.relationship('Usuario', backref='acessos')
+
+    def to_dict(self):
+        return {
+            'data_hora': self.data_hora.strftime('%d/%m/%Y %H:%M:%S'),
+            'ip':        self.ip or '—'
+        }
+
+
+# ─────────────────────────────────────────
 # EMAIL HELPERS
 # ─────────────────────────────────────────
 def _enviar_async(destinatarios, assunto, corpo_html):
@@ -508,6 +526,10 @@ def login():
     if not usuario or not usuario.verificar_senha(senha):
         return jsonify({'erro': 'E-mail ou senha incorretos'}), 401
     session['usuario_id'] = usuario.id
+    # Registra log de acesso
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+    db.session.add(LogAcesso(usuario_id=usuario.id, ip=ip))
+    db.session.commit()
     return jsonify(usuario.to_dict()), 200
 
 
@@ -729,6 +751,22 @@ def excluir_usuario(uid):
     db.session.delete(usuario)
     db.session.commit()
     return jsonify({'mensagem': 'Usuario excluido'}), 200
+
+
+@app.route('/api/usuarios/<int:uid>/acessos', methods=['GET'])
+@admin_required
+def listar_acessos(uid):
+    admin = db.session.get(Usuario, session['usuario_id'])
+    usuario = db.session.get(Usuario, uid)
+    if not usuario:
+        return jsonify({'erro': 'Usuario nao encontrado'}), 404
+    if admin.empresa and usuario.empresa != admin.empresa:
+        return jsonify({'erro': 'Acesso negado'}), 403
+    logs = (LogAcesso.query
+            .filter_by(usuario_id=uid)
+            .order_by(LogAcesso.data_hora.desc())
+            .limit(50).all())
+    return jsonify([l.to_dict() for l in logs]), 200
 
 
 @app.route('/api/setores', methods=['GET'])
@@ -1215,6 +1253,7 @@ def excluir_anexo(aid):
 def relatorio_pendencias():
     admin   = db.session.get(Usuario, session['usuario_id'])
     empresa = admin.empresa
+    filtro_uid = request.args.get('usuario_id', type=int)  # opcional
 
     # Tarefas não finalizadas, filtradas por empresa
     query = Tarefa.query.filter(Tarefa.status != 'Finalizado')
@@ -1278,6 +1317,9 @@ def relatorio_pendencias():
 
     # Ordena por nome do usuário, e dentro por prioridade (Alta primeiro)
     resultado = sorted(por_usuario.values(), key=lambda x: x['usuario']['nome'])
+    # Aplica filtro por usuário específico se solicitado
+    if filtro_uid:
+        resultado = [r for r in resultado if r['usuario']['id'] == filtro_uid]
     for item in resultado:
         item['tarefas'] = sorted(item['tarefas'], key=lambda t: (0 if t['prioridade'] == 'Alta' else 1, t['codigo']))
         item['total'] = len(item['tarefas'])

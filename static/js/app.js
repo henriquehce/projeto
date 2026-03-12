@@ -880,6 +880,10 @@ async function carregarUsuarios() {
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                     </svg> Editar
                 </button>` : ''}
+                <button class="btn-ghost btn-sm" onclick="abrirLogAcessos(${u.id}, '${escapar(u.nome)}')" title="Ver log de acessos">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Acessos
+                </button>
                 ${podExcluir
                     ? `<button class="btn-icon" onclick="confirmarExcluirUsuario(${u.id},'${escapar(u.nome)}')" title="Excluir">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1241,16 +1245,70 @@ function formataBytes(b) {
 }
 
 // ─────────────────────────────────────────
+// LOG DE ACESSOS
+// ─────────────────────────────────────────
+async function abrirLogAcessos(uid, nome) {
+    document.getElementById('log-acessos-nome').textContent = nome;
+    document.getElementById('log-acessos-corpo').innerHTML =
+        '<p style="text-align:center;color:var(--text-dim);padding:30px">Carregando…</p>';
+    abrirModal('modal-log-acessos');
+
+    const res = await api(`/api/usuarios/${uid}/acessos`);
+    const corpo = document.getElementById('log-acessos-corpo');
+    if (!res.ok) { corpo.innerHTML = '<p style="color:var(--error);padding:20px">Erro ao carregar.</p>'; return; }
+    const logs = await res.json();
+    if (!logs.length) {
+        corpo.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:30px">Nenhum acesso registrado.</p>';
+        return;
+    }
+    corpo.innerHTML = logs.map(l => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:10px">
+                <svg width="14" height="14" fill="none" stroke="var(--accent)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span style="font-size:14px">${l.data_hora}</span>
+            </div>
+            <span style="font-size:12px;color:var(--text-dim)">IP: ${l.ip}</span>
+        </div>`).join('');
+}
+
+// ─────────────────────────────────────────
 // RELATÓRIO DE PENDÊNCIAS
 // ─────────────────────────────────────────
+let dadosRelatorioCompleto = null;
+
 async function abrirRelatorio() {
     abrirModal('modal-relatorio');
     document.getElementById('relatorio-corpo').innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px">Carregando…</p>';
+    document.getElementById('relatorio-filtro-usuario').innerHTML = '<option value="">— Todos</option>';
 
     const res = await api('/api/relatorio/pendencias');
     if (!res.ok) { toast('Erro ao gerar relatório', 'error'); return; }
-    const dados = await res.json();
-    renderizarRelatorio(dados);
+    dadosRelatorioCompleto = await res.json();
+
+    // Popula o filtro com as pessoas que têm pendências
+    const sel = document.getElementById('relatorio-filtro-usuario');
+    dadosRelatorioCompleto.por_usuario.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.usuario.id;
+        opt.textContent = `${item.usuario.nome} (${item.total})`;
+        sel.appendChild(opt);
+    });
+
+    renderizarRelatorio(dadosRelatorioCompleto);
+}
+
+function aplicarFiltroRelatorio() {
+    if (!dadosRelatorioCompleto) return;
+    const uid = parseInt(document.getElementById('relatorio-filtro-usuario').value) || null;
+    if (!uid) {
+        renderizarRelatorio(dadosRelatorioCompleto);
+    } else {
+        const filtrado = {
+            ...dadosRelatorioCompleto,
+            por_usuario: dadosRelatorioCompleto.por_usuario.filter(i => i.usuario.id === uid)
+        };
+        renderizarRelatorio(filtrado);
+    }
 }
 
 function renderizarRelatorio(dados) {
