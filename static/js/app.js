@@ -1561,11 +1561,11 @@ function renderDashboard(d) {
                 ? t.responsaveis[0] + (t.responsaveis.length > 1 ? ` +${t.responsaveis.length - 1}` : '')
                 : (t.criado_por_nome ? `👤 ${t.criado_por_nome}` : '');
             return `
-            <div class="dash-recente-row" onclick="dashAbrirTarefa(${t.codigo})" title="Abrir tarefa #${t.codigo}">
-                <span style="font-size:11px;color:var(--accent);font-weight:700;min-width:42px">#${String(t.codigo).padStart(4,'0')}</span>
-                <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</span>
-                ${pessoaNome ? `<span class="dash-recente-pessoa" style="font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis">${escapar(pessoaNome)}</span>` : ''}
-                <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap;min-width:80px;text-align:right">${t.status}</span>
+            <div class="dash-recente-row" onclick="dashAbrirTarefa(${t.codigo})" title="${escapar(t.descricao)}">
+                <span style="font-size:11px;color:var(--accent);font-weight:700;flex-shrink:0;width:42px">#${String(t.codigo).padStart(4,'0')}</span>
+                <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escapar(t.descricao)}</span>
+                ${pessoaNome ? `<span class="dash-recente-pessoa" style="font-size:11px;color:var(--text-dim);white-space:nowrap;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis">${escapar(pessoaNome)}</span>` : ''}
+                <span class="dash-recente-status" style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap;flex-shrink:0">${t.status}</span>
             </div>`;
         }).join('')
         : '<p style="color:var(--text-dim);font-size:13px;padding:4px 0">Nenhuma tarefa neste filtro.</p>';
@@ -1575,24 +1575,30 @@ function renderDashboard(d) {
     const n       = items.length;
     const isMob   = window.innerWidth <= 640;
     const grafH   = isMob ? 70 : 80;
-    // Mobile: barras mais largas e menos labels para não poluir
     const barSlot = isMob ? Math.max(28, Math.floor(320 / n)) : Math.max(22, Math.floor(560 / n));
     const barW    = barSlot - 4;
     const grafW   = barSlot * n;
     const maxGraf = Math.max(...items.map(x => x.total), 1);
-    // Labels: 7d mostra todos, 14d de 2 em 2, 30d de 5 em 5, 90d de 10 em 10
     const labelStep = n <= 7 ? 1 : n <= 14 ? 2 : n <= 30 ? 5 : 10;
+
+    // Resolve CSS vars para cores reais (funciona em todos os browsers/modos)
+    const cs       = getComputedStyle(document.documentElement);
+    const corBarra = cs.getPropertyValue('--accent').trim()   || '#3b82f6';
+    const corVazia = cs.getPropertyValue('--border').trim()   || '#334155';
+    const corLabel = cs.getPropertyValue('--text-dim').trim() || '#64748b';
+
     const svgBars = items.map((item, i) => {
         const h = item.total > 0 ? Math.max(6, Math.round((item.total / maxGraf) * grafH)) : 3;
         const x = i * barSlot + 2;
         const mostrarLabel = (i % labelStep === 0) || i === n - 1;
-        const cor = item.total > 0 ? 'var(--accent)' : 'var(--border)';
+        const cor = item.total > 0 ? corBarra : corVazia;
+        const opacidade = item.total > 0 ? '0.85' : '0.3';
         return `<g>
             <rect x="${x}" y="${grafH - h}" width="${barW}" height="${h}" rx="3"
-                  fill="${cor}" opacity="${item.total > 0 ? '0.85' : '0.3'}"/>
-            ${item.total > 0 && !isMob ? `<text x="${x + barW/2}" y="${grafH - h - 4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${item.total}</text>` : ''}
-            ${item.total > 0 && isMob && h > 12 ? `<text x="${x + barW/2}" y="${grafH - h + 11}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.8)" font-weight="700">${item.total}</text>` : ''}
-            ${mostrarLabel ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="${isMob ? 9 : 8}" fill="var(--text-dim)">${item.dia}</text>` : ''}
+                  fill="${cor}" opacity="${opacidade}"/>
+            ${item.total > 0 && h > 14 ? `<text x="${x + barW/2}" y="${grafH - h + 12}" text-anchor="middle" font-size="9" fill="white" font-weight="700">${item.total}</text>` : ''}
+            ${item.total > 0 && h <= 14 ? `<text x="${x + barW/2}" y="${grafH - h - 3}" text-anchor="middle" font-size="9" fill="${corLabel}">${item.total}</text>` : ''}
+            ${mostrarLabel ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="${isMob ? 9 : 8}" fill="${corLabel}">${item.dia}</text>` : ''}
         </g>`;
     }).join('');
 
@@ -1602,9 +1608,9 @@ function renderDashboard(d) {
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">
             <svg viewBox="0 0 ${svgWidth} ${grafH + 18}"
                  width="${svgWidth}px" height="${grafH + 18}px"
-                 style="display:block;min-width:${isMob ? '100%' : 'auto'}">${svgBars}</svg>
+                 style="display:block">${svgBars}</svg>
         </div>
-        ${isMob && n > 7 ? `<p style="text-align:center;font-size:10px;color:var(--text-dim);margin:6px 0 0;opacity:.6">← deslize para ver mais →</p>` : ''}
+        ${isMob && n > 7 ? `<p style="text-align:center;font-size:10px;color:${corLabel};margin:6px 0 0;opacity:.7">← deslize para ver mais →</p>` : ''}
     `;
 
     // ── Tag de filtros ativos ────────────────────────────────

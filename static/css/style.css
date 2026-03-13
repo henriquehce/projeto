@@ -130,7 +130,7 @@ body {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    overflow-x: hidden;
+    overflow-x: clip; /* clip instead of hidden - allows child overflow-x:auto to work */
     -webkit-font-smoothing: antialiased;
 }
 
@@ -1106,7 +1106,7 @@ body {
     .filters-bar { gap: 6px; }
     .filter-chip { font-size: 12px; padding: 5px 12px; }
     .modal-box { max-height: 95vh; }
-    .app-main { padding: 16px 14px; }
+    .app-main { padding: 12px 10px; overflow-x: hidden; }
     .perfil-badge { display: none; }
 }
 
@@ -1744,7 +1744,10 @@ body {
     cursor: pointer;
     transition: background var(--trans);
     border-bottom: 1px solid var(--border);
+    min-width: 0; /* critical: allows flex children to shrink */
+    overflow: hidden;
 }
+.dash-recente-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-recente-row:last-child { border-bottom: none; }
 .dash-recente-row:hover { background: var(--surface2); }
 .dash-filtro-tag {
@@ -1816,10 +1819,11 @@ body {
     .dash-ranking-row .resp-avatar { width: 20px !important; height: 20px !important; font-size: 8px !important; }
 
     /* ── Lista de tarefas: esconde pessoa, status menor ── */
+    /* Lista de tarefas: só código + descrição no mobile */
     .dash-recente-pessoa { display: none !important; }
-    .dash-recente-row { padding: 8px 4px !important; gap: 6px !important; }
-    .dash-recente-row > span:first-child { min-width: 36px !important; }
-    .dash-recente-row > span:last-child { min-width: 0 !important; font-size: 10px !important; text-align: right; }
+    .dash-recente-status { display: none !important; }
+    .dash-recente-row { padding: 8px 6px !important; gap: 8px !important; }
+    .dash-recente-row > span:last-child { min-width: 0 !important; }
 
     /* ── Tags de filtro ── */
     .dash-filtro-tag { font-size: 10px !important; padding: 2px 8px !important; }
