@@ -303,6 +303,21 @@
                 <option value="Alta">↑ Alta</option>
             </select>
 
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                    <label class="field-label">Prazo <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
+                    <input type="date" id="nova-tarefa-prazo" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Recorrência</label>
+                    <select id="nova-tarefa-recorrente" class="field-select">
+                        <option value="">— Única</option>
+                        <option value="semanal">🔁 Semanal</option>
+                        <option value="mensal">🔁 Mensal</option>
+                    </select>
+                </div>
+            </div>
+
             <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px">
                 <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional — se não informar, a tarefa fica pessoal)</span></label>
                 <div id="responsaveis-criar" class="resp-selector"></div>
@@ -313,6 +328,23 @@
         <div class="modal-footer">
             <button onclick="fecharModal('modal-nova-tarefa')" class="btn-ghost">Cancelar</button>
             <button onclick="criarTarefa()" class="btn-primary">Criar Tarefa</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CONFIRMAÇÃO GENÉRICO -->
+<div id="modal-confirmacao" class="modal-overlay">
+    <div class="modal-box" style="max-width:400px">
+        <div class="modal-header">
+            <h3 id="confirm-titulo">Confirmar ação</h3>
+        </div>
+        <div class="modal-body">
+            <p id="confirm-msg" style="margin:0;font-size:15px;line-height:1.5;color:var(--text-base)"></p>
+            <p id="confirm-detalhe" style="margin:8px 0 0;font-size:13px;color:var(--text-dim)"></p>
+        </div>
+        <div class="modal-footer">
+            <button onclick="fecharModal('modal-confirmacao')" class="btn-ghost">Cancelar</button>
+            <button id="confirm-btn-ok" class="btn-danger">Confirmar</button>
         </div>
     </div>
 </div>

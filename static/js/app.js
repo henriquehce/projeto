@@ -742,11 +742,28 @@ async function alterarStatus(codigo, novoStatus) {
 }
 
 // ─────────────────────────────────────────
-// EXCLUIR TAREFA
+// MODAL DE CONFIRMAÇÃO GENÉRICO
 // ─────────────────────────────────────────
+function confirmar({ titulo, msg, detalhe = '', labelOk = 'Confirmar', danger = true, callback }) {
+    document.getElementById('confirm-titulo').textContent  = titulo;
+    document.getElementById('confirm-msg').textContent     = msg;
+    document.getElementById('confirm-detalhe').textContent = detalhe;
+    const btn = document.getElementById('confirm-btn-ok');
+    btn.textContent  = labelOk;
+    btn.className    = danger ? 'btn-danger' : 'btn-primary';
+    btn.onclick      = () => { fecharModal('modal-confirmacao'); callback(); };
+    abrirModal('modal-confirmacao');
+}
+
 function confirmarExcluirTarefa(codigo) {
-    if (confirm(`Excluir tarefa #${String(codigo).padStart(4,'0')}? Esta ação não pode ser desfeita.`))
-        excluirTarefa(codigo);
+    const t = todasTarefas.find(t => t.codigo === codigo);
+    confirmar({
+        titulo:   '🗑️ Mover para lixeira?',
+        msg:      `A tarefa #${String(codigo).padStart(4,'0')} será movida para a lixeira.`,
+        detalhe:  t ? `"${t.descricao.substring(0, 80)}${t.descricao.length > 80 ? '…' : ''}"` : '',
+        labelOk:  'Mover para lixeira',
+        callback: () => excluirTarefa(codigo)
+    });
 }
 
 async function excluirTarefa(codigo) {
@@ -992,7 +1009,13 @@ async function salvarEdicaoUsuario() {
 }
 
 function confirmarExcluirUsuario(id, nome) {
-    if (confirm(`Excluir "${nome}"?`)) excluirUsuario(id);
+    confirmar({
+        titulo:  '🗑️ Excluir usuário?',
+        msg:     `O usuário "${nome}" será removido do sistema.`,
+        detalhe: 'As tarefas criadas por ele serão mantidas.',
+        labelOk: 'Excluir usuário',
+        callback: () => excluirUsuario(id)
+    });
 }
 
 async function excluirUsuario(id) {
@@ -1656,10 +1679,17 @@ async function restaurarTarefa(codigo) {
 }
 
 async function excluirPermanente(codigo) {
-    if (!confirm('Excluir permanentemente? Esta ação não pode ser desfeita.')) return;
-    const res = await api(`/api/tarefas/${codigo}/permanente`, 'DELETE');
-    if (res.ok) { toast('Tarefa excluída permanentemente', 'success'); carregarLixeira(); }
-    else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+    confirmar({
+        titulo:   '⚠️ Excluir permanentemente?',
+        msg:      `A tarefa #${String(codigo).padStart(4,'0')} será excluída definitivamente.`,
+        detalhe:  'Esta ação não pode ser desfeita.',
+        labelOk:  'Excluir para sempre',
+        callback: async () => {
+            const res = await api(`/api/tarefas/${codigo}/permanente`, 'DELETE');
+            if (res.ok) { toast('Tarefa excluída permanentemente', 'success'); carregarLixeira(); }
+            else { const e = await res.json(); toast(e.erro || 'Erro', 'error'); }
+        }
+    });
 }
 
 
