@@ -795,9 +795,9 @@ def dashboard():
     uid     = u.id
 
     # Filtros opcionais
-    filtro_status   = request.args.get('status')       # ex: "Iniciado"
-    filtro_uid_resp = request.args.get('usuario_id', type=int)  # responsável
-    filtro_periodo  = request.args.get('periodo', '14', type=str)  # dias: 7, 14, 30, 90
+    filtro_status   = request.args.get('status')       # ex: "Iniciado" ou "pendentes"
+    filtro_uid_resp = request.args.get('usuario_id', type=int)
+    filtro_periodo  = request.args.get('periodo', '14', type=str)
 
     # Query base sem deletados
     if u.is_master():
@@ -834,10 +834,14 @@ def dashboard():
             t.criado_por == pid
         )
 
+    STATUSES_PENDENTES = [s for s in STATUSES_VALIDOS if s != 'Finalizado']
+
     tarefas_filtradas = todas_tarefas
     if filtro_uid_resp:
         tarefas_filtradas = [t for t in todas_tarefas if tem_pessoa(t, filtro_uid_resp)]
-    if filtro_status:
+    if filtro_status == 'pendentes':
+        tarefas_filtradas = [t for t in tarefas_filtradas if t.status in STATUSES_PENDENTES]
+    elif filtro_status:
         tarefas_filtradas = [t for t in tarefas_filtradas if t.status == filtro_status]
 
     total = len(tarefas_filtradas)

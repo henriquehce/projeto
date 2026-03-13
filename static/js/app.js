@@ -1445,13 +1445,16 @@ async function carregarDashboard(resetFiltros = false) {
 function renderDashboard(d) {
     // ── Cards de totais ──────────────────────────────────────
     document.getElementById('dash-total').textContent       = d.total;
+    document.getElementById('dash-nao-iniciado').textContent = d.por_status['Não iniciado'] ?? 0;
     document.getElementById('dash-pendentes').textContent   = d.pendentes;
     document.getElementById('dash-finalizadas').textContent = d.finalizadas;
     document.getElementById('dash-alta').textContent        = d.alta_prioridade;
 
-    // Destaca card ativo
+    // Destaca card ativo (pendentes é especial — não bate com nenhum status individual)
     document.querySelectorAll('.dash-card[data-status]').forEach(c => {
-        c.classList.toggle('dash-card-active', c.dataset.status === (dashFiltroStatus || ''));
+        const ds = c.dataset.status;
+        const ativo = ds === (dashFiltroStatus || '');
+        c.classList.toggle('dash-card-active', ativo);
     });
 
     // ── Filtro de usuário ────────────────────────────────────
@@ -1565,7 +1568,10 @@ function renderDashboard(d) {
 
     // ── Tag de filtros ativos ────────────────────────────────
     const tags = [];
-    if (dashFiltroStatus)  tags.push(`<span class="dash-filtro-tag" onclick="dashFiltrarStatus(null)">Status: ${dashFiltroStatus} ✕</span>`);
+    if (dashFiltroStatus) {
+        const label = dashFiltroStatus === 'pendentes' ? 'Pendentes (não finalizadas)' : `Status: ${dashFiltroStatus}`;
+        tags.push(`<span class="dash-filtro-tag" onclick="dashFiltrarStatus(null)">${label} ✕</span>`);
+    }
     if (dashFiltroUsuario) {
         const u = d.responsaveis_lista.find(r => String(r.id) === String(dashFiltroUsuario));
         if (u) tags.push(`<span class="dash-filtro-tag" onclick="dashFiltrarUsuario(null)">Pessoa: ${escapar(u.nome)} ✕</span>`);
