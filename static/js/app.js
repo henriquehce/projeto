@@ -1571,31 +1571,41 @@ function renderDashboard(d) {
         : '<p style="color:var(--text-dim);font-size:13px;padding:4px 0">Nenhuma tarefa neste filtro.</p>';
 
     // ── Gráfico de barras SVG ────────────────────────────────
-    const items  = d.criacoes_por_dia;
-    const n      = items.length;
-    const grafH  = 80;
-    // Largura mínima por barra para não sobrepor labels
-    const barSlot = Math.max(22, Math.floor(560 / n));
+    const items   = d.criacoes_por_dia;
+    const n       = items.length;
+    const isMob   = window.innerWidth <= 640;
+    const grafH   = isMob ? 70 : 80;
+    // Mobile: barras mais largas e menos labels para não poluir
+    const barSlot = isMob ? Math.max(28, Math.floor(320 / n)) : Math.max(22, Math.floor(560 / n));
     const barW    = barSlot - 4;
     const grafW   = barSlot * n;
     const maxGraf = Math.max(...items.map(x => x.total), 1);
-    // Mostra label de data a cada N barras para não sobrepor
-    const labelStep = n <= 14 ? 1 : n <= 30 ? 3 : 7;
+    // Labels: 7d mostra todos, 14d de 2 em 2, 30d de 5 em 5, 90d de 10 em 10
+    const labelStep = n <= 7 ? 1 : n <= 14 ? 2 : n <= 30 ? 5 : 10;
     const svgBars = items.map((item, i) => {
         const h = item.total > 0 ? Math.max(6, Math.round((item.total / maxGraf) * grafH)) : 3;
         const x = i * barSlot + 2;
         const mostrarLabel = (i % labelStep === 0) || i === n - 1;
+        const cor = item.total > 0 ? 'var(--accent)' : 'var(--border)';
         return `<g>
             <rect x="${x}" y="${grafH - h}" width="${barW}" height="${h}" rx="3"
-                  fill="${item.total > 0 ? 'var(--accent)' : 'var(--border)'}" opacity="${item.total > 0 ? '0.85' : '0.3'}"/>
-            ${item.total > 0 ? `<text x="${x + barW/2}" y="${grafH - h - 4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${item.total}</text>` : ''}
-            ${mostrarLabel ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${item.dia}</text>` : ''}
+                  fill="${cor}" opacity="${item.total > 0 ? '0.85' : '0.3'}"/>
+            ${item.total > 0 && !isMob ? `<text x="${x + barW/2}" y="${grafH - h - 4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${item.total}</text>` : ''}
+            ${item.total > 0 && isMob && h > 12 ? `<text x="${x + barW/2}" y="${grafH - h + 11}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.8)" font-weight="700">${item.total}</text>` : ''}
+            ${mostrarLabel ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="${isMob ? 9 : 8}" fill="var(--text-dim)">${item.dia}</text>` : ''}
         </g>`;
     }).join('');
-    document.getElementById('dash-grafico').innerHTML =
-        `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-         <svg viewBox="0 0 ${grafW} ${grafH + 18}" width="${Math.max(grafW, 300)}px" height="${grafH + 18}px" style="min-width:100%">${svgBars}</svg>
-         </div>`;
+
+    const svgWidth  = Math.max(grafW, isMob ? 280 : 300);
+    const container = document.getElementById('dash-grafico');
+    container.innerHTML = `
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">
+            <svg viewBox="0 0 ${svgWidth} ${grafH + 18}"
+                 width="${svgWidth}px" height="${grafH + 18}px"
+                 style="display:block;min-width:${isMob ? '100%' : 'auto'}">${svgBars}</svg>
+        </div>
+        ${isMob && n > 7 ? `<p style="text-align:center;font-size:10px;color:var(--text-dim);margin:6px 0 0;opacity:.6">← deslize para ver mais →</p>` : ''}
+    `;
 
     // ── Tag de filtros ativos ────────────────────────────────
     const tags = [];

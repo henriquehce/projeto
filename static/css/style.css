@@ -1772,42 +1772,65 @@ body {
 .dash-periodo-btn:hover { border-color: var(--accent); color: var(--accent); }
 .dash-periodo-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 @media (max-width: 640px) {
-    /* Grid principal empilha */
-    .dash-grid { grid-template-columns: 1fr !important; }
+    /* ── Layout geral ── */
+    .dash-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
     .dash-panel-full { grid-column: 1 !important; }
+    .dash-panel { padding: 14px 12px !important; }
+    .dash-panel-title { font-size: 10px !important; margin-bottom: 10px !important; }
 
-    /* Cards de totais: 2 colunas */
+    /* ── Filtros no topo ── */
+    #page-dashboard .page-header { gap: 8px; }
+    #page-dashboard > div:nth-child(2) {
+        flex-direction: column !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+    }
+    #page-dashboard > div:nth-child(2) > div:first-child { order: 2; }
+    #dash-filtro-usuario {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        font-size: 13px !important;
+    }
+    /* Botões de período em linha compacta */
+    #page-dashboard > div:nth-child(2) > div:nth-child(2) { order: 1; }
+    .dash-periodo-btn { padding: 5px 10px !important; font-size: 11px !important; flex: 1; text-align: center; }
+    #page-dashboard > div:nth-child(2) > div:nth-child(2) { width: 100%; }
+
+    /* ── Cards: 2 colunas ── */
     #page-dashboard > div:nth-child(3) {
         grid-template-columns: 1fr 1fr !important;
         gap: 8px !important;
     }
-    .dash-card { padding: 12px 10px !important; }
-    .dash-card-num { font-size: 22px !important; }
+    .dash-card { padding: 12px 8px !important; }
+    .dash-card-num { font-size: 24px !important; }
     .dash-card-label { font-size: 10px !important; }
 
-    /* Filtros: período menor, select ocupa largura */
-    .dash-periodo-btn { padding: 3px 7px !important; font-size: 10px !important; }
-    #dash-filtro-usuario { font-size: 12px !important; min-width: 0 !important; width: 100% !important; }
+    /* ── Barras de status: mais compactas ── */
+    .dash-barra-row { padding: 5px 4px !important; margin-bottom: 2px !important; }
 
-    /* Painéis com menos padding */
-    .dash-panel { padding: 12px 12px !important; }
-    .dash-panel-title { font-size: 10px !important; margin-bottom: 8px !important; }
-
-    /* Ranking: esconde barra de progresso, só avatar + nome + número */
+    /* ── Ranking: só avatar + nome + número (sem barra) ── */
     .dash-ranking-row > div:last-child { display: none !important; }
-    .dash-ranking-row { padding: 5px 6px !important; margin-bottom: 1px !important; }
+    .dash-ranking-row { padding: 6px 4px !important; margin-bottom: 0 !important; }
     .dash-ranking-row > div:first-child { margin-bottom: 0 !important; }
+    .dash-ranking-row .resp-avatar { width: 20px !important; height: 20px !important; font-size: 8px !important; }
 
-    /* Tarefas: esconde coluna de pessoa */
+    /* ── Lista de tarefas: esconde pessoa, status menor ── */
     .dash-recente-pessoa { display: none !important; }
-    .dash-recente-row { padding: 7px 4px !important; gap: 6px !important; }
-    .dash-recente-row > span:last-child { min-width: 70px !important; font-size: 10px !important; }
+    .dash-recente-row { padding: 8px 4px !important; gap: 6px !important; }
+    .dash-recente-row > span:first-child { min-width: 36px !important; }
+    .dash-recente-row > span:last-child { min-width: 0 !important; font-size: 10px !important; text-align: right; }
 
-    /* Barras de status: menos padding */
-    .dash-barra-row { padding: 5px 6px !important; }
-
-    /* Tags de filtro compactas */
+    /* ── Tags de filtro ── */
     .dash-filtro-tag { font-size: 10px !important; padding: 2px 8px !important; }
+
+    /* ── Gráfico: scroll horizontal, altura menor ── */
+    #dash-grafico {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 4px !important;
+    }
+    #dash-grafico > div { min-width: max-content; }
 }
 
 /* ══════════════════════════════════════
