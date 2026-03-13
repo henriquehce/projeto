@@ -939,6 +939,46 @@ body {
 .resp-avatar:first-child { margin-left: 0; }
 .resp-avatar:hover { z-index: 2; transform: scale(1.1); }
 
+/* ── Wrap para posicionar o ponto online ── */
+.resp-avatar-wrap {
+    position: relative;
+    display: inline-flex;
+    margin-left: -6px;
+    flex-shrink: 0;
+}
+.resp-avatar-wrap:first-child { margin-left: 0; }
+.resp-avatar-wrap .resp-avatar { margin-left: 0; }
+
+/* ── Ponto online ── */
+.online-dot {
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid var(--bg);
+    transition: background 0.3s ease;
+    z-index: 3;
+}
+.online-dot-active {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34,197,94,.25);
+    animation: pulse-online 2s infinite;
+}
+@keyframes pulse-online {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(34,197,94,.25); }
+    50%       { box-shadow: 0 0 0 5px rgba(34,197,94,.08); }
+}
+
+/* Dot maior nos cards de usuário */
+.usuario-avatar ~ .online-dot,
+.resp-avatar-wrap:has(.usuario-avatar) .online-dot {
+    width: 12px; height: 12px;
+    bottom: 1px; right: 1px;
+}
+
 .resp-extra { background: var(--border2); color: var(--text-dim); font-size: 9px; }
 
 .sem-responsavel { font-size: 12px; color: var(--text-dim); font-style: italic; }

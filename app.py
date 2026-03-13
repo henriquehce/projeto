@@ -115,6 +115,7 @@ class Usuario(db.Model):
     empresa       = db.Column(db.String(150), nullable=True)
     setor         = db.Column(db.String(150), nullable=True)
     comentarios   = db.relationship('Comentario', backref='autor', lazy=True)
+    last_seen     = db.Column(db.DateTime, nullable=True)  # online indicator
 
     def definir_senha(self, senha_plain):
         self.senha_hash = bcrypt.hashpw(
@@ -141,7 +142,8 @@ class Usuario(db.Model):
             'tipo_perfil':  self.tipo_perfil,
             'trocar_senha': self.trocar_senha,
             'empresa':      self.empresa or '',
-            'setor':        self.setor or ''
+            'setor':        self.setor or '',
+            'last_seen':    self.last_seen.isoformat() if self.last_seen else None
         }
 
 
@@ -157,6 +159,8 @@ class Tarefa(db.Model):
     empresa        = db.Column(db.String(150), nullable=True)
     deletado_em    = db.Column(db.DateTime, nullable=True)   # soft delete
     deletado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    data_prazo     = db.Column(db.Date, nullable=True)        # prazo
+    recorrente     = db.Column(db.String(10), nullable=True)  # 'semanal' | 'mensal' | None
     responsaveis   = db.relationship('Usuario', secondary=tarefa_responsaveis, lazy='subquery',
                                      backref=db.backref('tarefas_responsavel', lazy=True),
                                      foreign_keys=[tarefa_responsaveis.c.tarefa_codigo,
@@ -182,6 +186,14 @@ class Tarefa(db.Model):
                 delegada = True
             if viewer_id in resp_ids or viewer_id in admin_colab_ids:
                 comigo = True
+        hoje = agora_br().date()
+        prazo_status = None
+        if self.data_prazo and self.status != 'Finalizado':
+            diff = (self.data_prazo - hoje).days
+            if diff < 0:      prazo_status = 'vencida'
+            elif diff == 0:   prazo_status = 'hoje'
+            elif diff <= 3:   prazo_status = 'urgente'
+            else:             prazo_status = 'ok'
         return {
             'codigo':        self.codigo,
             'descricao':     self.descricao,
@@ -195,6 +207,10 @@ class Tarefa(db.Model):
             'comigo':        comigo,
             'deletado_em':   self.deletado_em.strftime('%d/%m/%Y %H:%M') if self.deletado_em else None,
             'deletado_por':  self.deletado_por,
+            'data_prazo':    self.data_prazo.strftime('%Y-%m-%d') if self.data_prazo else None,
+            'data_prazo_fmt':self.data_prazo.strftime('%d/%m/%Y') if self.data_prazo else None,
+            'prazo_status':  prazo_status,
+            'recorrente':    self.recorrente or None,
             'responsaveis':  [
                 {'id': u.id, 'nome': u.nome, 'funcao': u.funcao, 'setor': u.setor or ''}
                 for u in self.responsaveis
@@ -543,9 +559,18 @@ def logout():
 @login_required
 def me():
     u = usuario_atual()
+    u.last_seen = agora_br()
     registrar_acesso(u.id)
     safe_commit()
     return jsonify(u.to_dict()), 200
+
+@app.route('/api/ping', methods=['POST'])
+@login_required
+def ping():
+    u = usuario_atual()
+    u.last_seen = agora_br()
+    safe_commit()
+    return jsonify({'ok': True})
 
 
 # ─────────────────────────────────────────
@@ -650,6 +675,18 @@ def listar_colaborativos():
     if u.empresa:
         q = q.filter_by(empresa=u.empresa)
     return jsonify([x.to_dict() for x in q.all()])
+
+
+@app.route('/api/usuarios/online', methods=['GET'])
+@login_required
+def usuarios_online():
+    """Retorna IDs dos usuários ativos nos últimos 5 minutos."""
+    limite = agora_br() - timedelta(minutes=5)
+    u = usuario_atual()
+    q = Usuario.query.filter(Usuario.last_seen >= limite)
+    if u.empresa:
+        q = q.filter_by(empresa=u.empresa)
+    return jsonify([x.id for x in q.all()])
 
 
 @app.route('/api/usuarios/admins', methods=['GET'])
@@ -1034,6 +1071,13 @@ def criar_tarefa():
         descricao=dados['descricao'], prioridade=prioridade,
         compartilhada=compartilhada, criado_por=session['usuario_id'], empresa=empresa
     )
+    if dados.get('data_prazo'):
+        try:
+            from datetime import date
+            nova.data_prazo = date.fromisoformat(dados['data_prazo'])
+        except Exception:
+            pass
+    nova.recorrente = dados.get('recorrente') or None
     db.session.add(nova)
     db.session.flush()
     responsaveis_novos = []
@@ -1140,7 +1184,48 @@ def atualizar_status(codigo):
     safe_commit()
     if anterior != novo_status:
         email_status_alterado(tarefa, anterior, novo_status, usuario.nome, usuario.id)
-    return jsonify(tarefa.to_dict()), 200
+
+    # Tarefas recorrentes: ao finalizar, cria próxima ocorrência
+    nova_tarefa = None
+    if novo_status == 'Finalizado' and tarefa.recorrente in ('semanal', 'mensal'):
+        from datetime import date, timedelta
+        if tarefa.data_prazo:
+            if tarefa.recorrente == 'semanal':
+                proximo_prazo = tarefa.data_prazo + timedelta(weeks=1)
+            else:
+                # Avança um mês, mantendo o dia
+                m = tarefa.data_prazo.month + 1
+                y = tarefa.data_prazo.year + (m - 1) // 12
+                m = ((m - 1) % 12) + 1
+                import calendar
+                d = min(tarefa.data_prazo.day, calendar.monthrange(y, m)[1])
+                proximo_prazo = date(y, m, d)
+        else:
+            proximo_prazo = None
+
+        nova_tarefa = Tarefa(
+            descricao=tarefa.descricao,
+            prioridade=tarefa.prioridade,
+            compartilhada=tarefa.compartilhada,
+            criado_por=tarefa.criado_por,
+            empresa=tarefa.empresa,
+            data_prazo=proximo_prazo,
+            recorrente=tarefa.recorrente
+        )
+        db.session.add(nova_tarefa)
+        db.session.flush()
+        for r in tarefa.responsaveis:
+            nova_tarefa.responsaveis.append(r)
+        for a in tarefa.admins_colabs:
+            nova_tarefa.admins_colabs.append(a)
+        registrar_historico(nova_tarefa.codigo, session['usuario_id'],
+            f'Tarefa recorrente ({tarefa.recorrente}) criada automaticamente a partir de #{codigo}.')
+        safe_commit()
+
+    resultado = tarefa.to_dict()
+    if nova_tarefa:
+        resultado['nova_recorrente'] = nova_tarefa.to_dict()
+    return jsonify(resultado), 200
 
 
 @app.route('/api/tarefas/<int:codigo>/prioridade', methods=['PATCH'])

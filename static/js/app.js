@@ -260,6 +260,7 @@ function entrarNoApp() {
     document.getElementById('nav-lixeira-item').style.display    = admin ? 'block'       : 'none';
     document.getElementById('btn-relatorio').style.display       = admin ? 'inline-flex' : 'none';
 
+    iniciarOnline();
     navTo('tarefas');
     carregarTarefas();
 }
@@ -577,7 +578,11 @@ function renderResponsaveisAvatares(responsaveis, admins_colabs) {
     const extras = todos.length - 3;
     const nomes  = todos.map(r => r.nome).join(', ');
     return `<div class="resp-group" title="${escapar(nomes)}">
-        ${vis.map(r => `<div class="resp-avatar${r.tipo === 'admin' ? ' resp-avatar-admin' : ''}">${iniciais(r.nome)}</div>`).join('')}
+        ${vis.map(r => `
+        <div class="resp-avatar-wrap">
+            <div class="resp-avatar${r.tipo === 'admin' ? ' resp-avatar-admin' : ''}">${iniciais(r.nome)}</div>
+            ${dotOnline(r.id)}
+        </div>`).join('')}
         ${extras > 0 ? `<div class="resp-avatar resp-extra">+${extras}</div>` : ''}
     </div>`;
 }
@@ -880,7 +885,10 @@ async function carregarUsuarios() {
         return `
         <div class="usuario-card">
             <div class="usuario-info">
-                <div class="usuario-avatar">${iniciais(u.nome)}</div>
+                <div class="resp-avatar-wrap">
+                    <div class="usuario-avatar">${iniciais(u.nome)}</div>
+                    ${dotOnline(u.id)}
+                </div>
                 <div>
                     <p class="usuario-nome">${escapar(u.nome)}</p>
                     <p class="usuario-email">${escapar(u.email)}</p>
@@ -1727,6 +1735,46 @@ function toggleSenhaVisivel(inputId, btn) {
     const mostrar = input.type === 'password';
     input.type = mostrar ? 'text' : 'password';
     btn.style.color = mostrar ? 'var(--accent)' : 'var(--text-dim)';
+}
+
+// ─────────────────────────────────────────
+// ONLINE INDICATOR
+// ─────────────────────────────────────────
+let onlineIds      = new Set();
+let pingInterval   = null;
+let onlineInterval = null;
+
+function iniciarOnline() {
+    // Ping imediato + a cada 60s
+    api('/api/ping', 'POST');
+    if (pingInterval) clearInterval(pingInterval);
+    pingInterval = setInterval(() => api('/api/ping', 'POST'), 60_000);
+
+    // Busca quem está online imediato + a cada 30s
+    atualizarOnline();
+    if (onlineInterval) clearInterval(onlineInterval);
+    onlineInterval = setInterval(atualizarOnline, 30_000);
+}
+
+async function atualizarOnline() {
+    const res = await api('/api/usuarios/online');
+    if (!res.ok) return;
+    const ids = await res.json();
+    onlineIds = new Set(ids);
+    // Atualiza pontinhos nos cards de usuários (se a página estiver aberta)
+    document.querySelectorAll('[data-online-uid]').forEach(el => {
+        const uid = parseInt(el.dataset.onlineUid);
+        el.classList.toggle('online-dot-active', onlineIds.has(uid));
+    });
+}
+
+function isOnline(uid) {
+    return onlineIds.has(uid);
+}
+
+function dotOnline(uid) {
+    const ativo = onlineIds.has(uid);
+    return `<span class="online-dot ${ativo ? 'online-dot-active' : ''}" data-online-uid="${uid}" title="${ativo ? 'Online agora' : 'Offline'}"></span>`;
 }
 
 function iniciais(nome) {
