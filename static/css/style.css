@@ -1734,6 +1734,16 @@ body {
 @media (max-width: 640px) {
     .dash-grid { grid-template-columns: 1fr !important; }
     .dash-panel-full { grid-column: 1 !important; }
+    /* Cards de total em 2 colunas no mobile */
+    #page-dashboard > div:nth-child(3) {
+        grid-template-columns: 1fr 1fr !important;
+    }
+    .dash-card-num { font-size: 24px !important; }
+    /* Período btns menores */
+    .dash-periodo-btn { padding: 3px 8px !important; font-size: 10px !important; }
+    /* Tarefas recentes: esconde coluna de pessoa no mobile, só código + desc + status */
+    .dash-recente-pessoa { display: none !important; }
+    .dash-recente-row { padding: 8px 6px !important; gap: 6px !important; }
 }
 
 /* ══════════════════════════════════════

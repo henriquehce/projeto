@@ -826,13 +826,17 @@ def dashboard():
 
     todas_tarefas = q.all()
 
-    # Aplica filtro de responsável (para totais filtrados)
-    def tem_responsavel(t, resp_uid):
-        return any(r.id == resp_uid for r in t.responsaveis)
+    # Função central: pessoa está envolvida na tarefa?
+    def tem_pessoa(t, pid):
+        return (
+            any(r.id == pid for r in t.responsaveis) or
+            any(a.id == pid for a in t.admins_colabs) or
+            t.criado_por == pid
+        )
 
     tarefas_filtradas = todas_tarefas
     if filtro_uid_resp:
-        tarefas_filtradas = [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)]
+        tarefas_filtradas = [t for t in todas_tarefas if tem_pessoa(t, filtro_uid_resp)]
     if filtro_status:
         tarefas_filtradas = [t for t in tarefas_filtradas if t.status == filtro_status]
 
@@ -845,7 +849,7 @@ def dashboard():
     alta_prioridade = sum(1 for t in tarefas_filtradas if t.prioridade == 'Alta' and t.status != 'Finalizado')
 
     # Tarefas recentes (sem filtro de status, mas com filtro de usuário)
-    base_recentes = todas_tarefas if not filtro_uid_resp else [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)]
+    base_recentes = todas_tarefas if not filtro_uid_resp else [t for t in todas_tarefas if tem_pessoa(t, filtro_uid_resp)]
     recentes = sorted(base_recentes, key=lambda t: t.codigo, reverse=True)[:8]
 
     # Gráfico por período escolhido
@@ -855,7 +859,7 @@ def dashboard():
     for i in range(dias - 1, -1, -1):
         d = (hoje - timedelta(days=i)).strftime('%d/%m')
         criacoes_por_dia[d] = 0
-    base_graf = todas_tarefas if not filtro_uid_resp else [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)]
+    base_graf = todas_tarefas if not filtro_uid_resp else [t for t in todas_tarefas if tem_pessoa(t, filtro_uid_resp)]
     for t in base_graf:
         d = t.data_criacao.strftime('%d/%m')
         if d in criacoes_por_dia:
@@ -920,22 +924,12 @@ def dashboard():
                     por_usuario[criador.id]['alta'] += 1
     ranking = sorted(por_usuario.values(), key=lambda x: x['total'], reverse=True)[:10]
 
-    # Tarefas filtradas para exibição — quando há filtro ativo, mostra todas as tarefas
-    # da pessoa/status filtrado ordenadas por código desc (não só as 8 recentes)
-    base_lista = tarefas_filtradas if (filtro_status or filtro_uid_resp) else \
-                 sorted(todas_tarefas if not filtro_uid_resp else
-                        [t for t in todas_tarefas if tem_responsavel(t, filtro_uid_resp)],
-                        key=lambda t: t.codigo, reverse=True)[:8]
-
-    # Quando há filtro de pessoa, inclui tarefas onde ela é criador, resp ou admin_colab
-    if filtro_uid_resp and not filtro_status:
-        base_lista = [t for t in todas_tarefas if (
-            any(r.id == filtro_uid_resp for r in t.responsaveis) or
-            any(a.id == filtro_uid_resp for a in t.admins_colabs) or
-            t.criado_por == filtro_uid_resp
-        )]
-        base_lista = sorted(base_lista, key=lambda t: t.codigo, reverse=True)
-    elif not filtro_uid_resp and not filtro_status:
+    # Lista de tarefas para exibição:
+    # — Sem filtro: 8 mais recentes
+    # — Com qualquer filtro: todas as tarefas filtradas (já via tem_pessoa + status)
+    if filtro_uid_resp or filtro_status:
+        base_lista = sorted(tarefas_filtradas, key=lambda t: t.codigo, reverse=True)
+    else:
         base_lista = sorted(todas_tarefas, key=lambda t: t.codigo, reverse=True)[:8]
 
     return jsonify({

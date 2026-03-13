@@ -1530,31 +1530,38 @@ function renderDashboard(d) {
             <div class="dash-recente-row" onclick="dashAbrirTarefa(${t.codigo})" title="Abrir tarefa #${t.codigo}">
                 <span style="font-size:11px;color:var(--accent);font-weight:700;min-width:42px">#${String(t.codigo).padStart(4,'0')}</span>
                 <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapar(t.descricao)}</span>
-                ${pessoaNome ? `<span style="font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis">${escapar(pessoaNome)}</span>` : ''}
+                ${pessoaNome ? `<span class="dash-recente-pessoa" style="font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis">${escapar(pessoaNome)}</span>` : ''}
                 <span style="font-size:11px;color:${STATUS_COR[t.status]};font-weight:600;white-space:nowrap;min-width:80px;text-align:right">${t.status}</span>
             </div>`;
         }).join('')
         : '<p style="color:var(--text-dim);font-size:13px;padding:4px 0">Nenhuma tarefa neste filtro.</p>';
 
     // ── Gráfico de barras SVG ────────────────────────────────
-    const grafH  = 90;
-    const grafW  = 560;
     const items  = d.criacoes_por_dia;
-    const barW   = Math.max(4, Math.floor(grafW / items.length) - 4);
+    const n      = items.length;
+    const grafH  = 80;
+    // Largura mínima por barra para não sobrepor labels
+    const barSlot = Math.max(22, Math.floor(560 / n));
+    const barW    = barSlot - 4;
+    const grafW   = barSlot * n;
     const maxGraf = Math.max(...items.map(x => x.total), 1);
+    // Mostra label de data a cada N barras para não sobrepor
+    const labelStep = n <= 14 ? 1 : n <= 30 ? 3 : 7;
     const svgBars = items.map((item, i) => {
         const h = item.total > 0 ? Math.max(6, Math.round((item.total / maxGraf) * grafH)) : 3;
-        const x = i * (barW + 4) + 2;
-        const mostrar = items.length <= 14 || i % 2 === 0;
-        return `<g style="cursor:default">
+        const x = i * barSlot + 2;
+        const mostrarLabel = (i % labelStep === 0) || i === n - 1;
+        return `<g>
             <rect x="${x}" y="${grafH - h}" width="${barW}" height="${h}" rx="3"
-                  fill="${item.total > 0 ? 'var(--accent)' : 'var(--border)'}" opacity="${item.total > 0 ? '0.85' : '0.4'}"/>
+                  fill="${item.total > 0 ? 'var(--accent)' : 'var(--border)'}" opacity="${item.total > 0 ? '0.85' : '0.3'}"/>
             ${item.total > 0 ? `<text x="${x + barW/2}" y="${grafH - h - 4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${item.total}</text>` : ''}
-            ${mostrar ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${item.dia}</text>` : ''}
+            ${mostrarLabel ? `<text x="${x + barW/2}" y="${grafH + 13}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${item.dia}</text>` : ''}
         </g>`;
     }).join('');
     document.getElementById('dash-grafico').innerHTML =
-        `<svg viewBox="0 0 ${grafW} ${grafH + 18}" width="100%" preserveAspectRatio="xMidYMid meet" style="overflow:visible">${svgBars}</svg>`;
+        `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+         <svg viewBox="0 0 ${grafW} ${grafH + 18}" width="${Math.max(grafW, 300)}px" height="${grafH + 18}px" style="min-width:100%">${svgBars}</svg>
+         </div>`;
 
     // ── Tag de filtros ativos ────────────────────────────────
     const tags = [];
