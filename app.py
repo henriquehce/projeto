@@ -1111,8 +1111,6 @@ def excluir_tarefa(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
-        return jsonify({'erro': 'Acesso negado'}), 403
     # Soft delete
     tarefa.deletado_em  = agora_br()
     tarefa.deletado_por = session['usuario_id']
@@ -1130,8 +1128,6 @@ def restaurar_tarefa(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada na lixeira'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
-        return jsonify({'erro': 'Acesso negado'}), 403
     tarefa.deletado_em = None
     registrar_historico(codigo, session['usuario_id'], f'Tarefa restaurada da lixeira por {admin.nome}.')
     safe_commit()
@@ -1147,8 +1143,6 @@ def excluir_permanente(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    if not admin.is_master() and tarefa.criado_por != session['usuario_id']:
-        return jsonify({'erro': 'Acesso negado'}), 403
     db.session.delete(tarefa)
     safe_commit()
     return jsonify({'mensagem': f'Tarefa #{codigo} excluida permanentemente'}), 200
@@ -1163,12 +1157,10 @@ def atualizar_status(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado — empresa diferente'}), 403
+    # Colaborativo só altera status de tarefas onde é responsável
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in [u.id for u in tarefa.responsaveis]:
         return jsonify({'erro': 'Acesso negado — você não é responsável desta tarefa'}), 403
-    if usuario.tipo_perfil == 'Administrador':
-        ids_admins_colabs = [u.id for u in tarefa.admins_colabs]
-        if tarefa.criado_por != usuario.id and usuario.id not in ids_admins_colabs:
-            return jsonify({'erro': 'Acesso negado — você não é criador nem admin colaborador desta tarefa'}), 403
+    # Admin e Admin Master podem alterar status de qualquer tarefa da empresa
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
         return jsonify({'erro': 'Status invalido'}), 400
@@ -1237,7 +1229,6 @@ def atualizar_prioridade(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    if not admin.is_master() and tarefa.criado_por != admin.id:
         return jsonify({'erro': 'Acesso negado'}), 403
     nova = request.json.get('prioridade')
     if nova not in PRIORIDADES_VALIDAS:
@@ -1256,7 +1247,6 @@ def atualizar_responsaveis(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    if not admin.is_master() and tarefa.criado_por != admin.id:
         return jsonify({'erro': 'Acesso negado'}), 403
     ids_antes = {u.id for u in tarefa.responsaveis}
     empresa   = admin.empresa
@@ -1292,7 +1282,6 @@ def atualizar_admins_colab(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    if not admin.is_master() and tarefa.criado_por != admin.id:
         return jsonify({'erro': 'Acesso negado'}), 403
     empresa = admin.empresa
     ids_admins_antes = {u.id for u in tarefa.admins_colabs}
