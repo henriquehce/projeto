@@ -1336,13 +1336,12 @@ def adicionar_comentario(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    ids_resp      = [u.id for u in tarefa.responsaveis]
-    ids_adm_colab = [u.id for u in tarefa.admins_colabs]
-    if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in ids_resp:
-        return jsonify({'erro': 'Acesso negado'}), 403
-    if usuario.tipo_perfil == 'Administrador':
-        if tarefa.criado_por != usuario.id and usuario.id not in ids_adm_colab:
+    # Colaborativo só comenta em tarefas onde é responsável
+    if usuario.tipo_perfil == 'Colaborativo':
+        ids_resp = [u.id for u in tarefa.responsaveis]
+        if usuario.id not in ids_resp:
             return jsonify({'erro': 'Acesso negado'}), 403
+    # Admin e Admin Master podem comentar em qualquer tarefa da empresa
     texto = request.json.get('texto', '').strip()
     if not texto:
         return jsonify({'erro': 'Comentario nao pode ser vazio'}), 400

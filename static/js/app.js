@@ -331,10 +331,13 @@ function getTarefasFiltradas() {
         ? todasTarefas
         : todasTarefas.filter(t => filtrosAtivos.has(t.status));
     if (buscaAtual.trim()) {
-        const q = buscaAtual.trim().toLowerCase();
+        const q    = buscaAtual.trim().toLowerCase().replace(/^#/, ''); // aceita "#55" ou "55"
+        const qNum = parseInt(q);
         lista = lista.filter(t =>
             t.descricao.toLowerCase().includes(q) ||
-            (t.responsaveis || []).some(r => r.nome.toLowerCase().includes(q))
+            (t.responsaveis || []).some(r => r.nome.toLowerCase().includes(q)) ||
+            (!isNaN(qNum) && t.codigo === qNum) ||
+            String(t.codigo).padStart(4, '0').includes(q)
         );
     }
     if (ordemAtual.coluna) {
