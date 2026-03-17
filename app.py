@@ -310,6 +310,32 @@ class LogAcesso(db.Model):
 
 
 # ─────────────────────────────────────────
+# CHANGELOG
+# ─────────────────────────────────────────
+CATEGORIAS_CHANGELOG = ['feature', 'fix', 'improvement', 'removed']
+
+class ChangelogEntry(db.Model):
+    __tablename__ = 'changelog_entries'
+    id           = db.Column(db.Integer, primary_key=True)
+    categoria    = db.Column(db.String(20), nullable=False)   # feature | fix | improvement | removed
+    titulo       = db.Column(db.String(200), nullable=False)
+    descricao    = db.Column(db.Text, nullable=True)
+    criado_em    = db.Column(db.DateTime, default=agora_br)
+    criado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    autor        = db.relationship('Usuario', foreign_keys=[criado_por])
+
+    def to_dict(self):
+        return {
+            'id':         self.id,
+            'categoria':  self.categoria,
+            'titulo':     self.titulo,
+            'descricao':  self.descricao or '',
+            'criado_em':  self.criado_em.strftime('%d/%m/%Y %H:%M'),
+            'autor_nome': self.autor.nome if self.autor else 'Sistema'
+        }
+
+
+# ─────────────────────────────────────────
 # EMAIL HELPERS
 # ─────────────────────────────────────────
 def _enviar_async(destinatarios, assunto, corpo_html):
@@ -1748,6 +1774,59 @@ def marcar_item_checklist(item_id):
     item.concluido_em  = agora_br() if concluido else None
     safe_commit()
     return jsonify(item.to_dict()), 200
+
+
+# ─────────────────────────────────────────
+# CHANGELOG ROUTES
+# ─────────────────────────────────────────
+
+@app.route('/api/changelog', methods=['GET'])
+@login_required
+def listar_changelog():
+    entradas = ChangelogEntry.query.order_by(ChangelogEntry.criado_em.desc()).all()
+    return jsonify([e.to_dict() for e in entradas])
+
+
+@app.route('/api/changelog', methods=['POST'])
+@login_required
+def criar_changelog():
+    usuario = usuario_atual()
+    if not usuario.is_admin():
+        return jsonify({'erro': 'Apenas administradores podem adicionar entradas'}), 403
+
+    dados     = request.json
+    categoria = dados.get('categoria', '').strip()
+    titulo    = dados.get('titulo', '').strip()
+    descricao = dados.get('descricao', '').strip()
+
+    if not categoria or not titulo:
+        return jsonify({'erro': 'Categoria e título são obrigatórios'}), 400
+    if categoria not in CATEGORIAS_CHANGELOG:
+        return jsonify({'erro': 'Categoria inválida'}), 400
+
+    entrada = ChangelogEntry(
+        categoria=categoria,
+        titulo=titulo,
+        descricao=descricao or None,
+        criado_por=session['usuario_id']
+    )
+    db.session.add(entrada)
+    safe_commit()
+    return jsonify(entrada.to_dict()), 201
+
+
+@app.route('/api/changelog/<int:entry_id>', methods=['DELETE'])
+@login_required
+def excluir_changelog(entry_id):
+    usuario = usuario_atual()
+    if not usuario.is_admin():
+        return jsonify({'erro': 'Apenas administradores podem excluir entradas'}), 403
+    entrada = db.session.get(ChangelogEntry, entry_id)
+    if not entrada:
+        return jsonify({'erro': 'Entrada não encontrada'}), 404
+    db.session.delete(entrada)
+    safe_commit()
+    return jsonify({'mensagem': 'Entrada removida'}), 200
 
 
 if __name__ == '__main__':

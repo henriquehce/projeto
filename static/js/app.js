@@ -259,6 +259,7 @@ function entrarNoApp() {
     document.getElementById('nav-dashboard-item').style.display  = admin ? 'block'       : 'none';
     document.getElementById('nav-lixeira-item').style.display    = admin ? 'block'       : 'none';
     document.getElementById('btn-relatorio').style.display       = admin ? 'inline-flex' : 'none';
+    document.getElementById('btn-novo-changelog').style.display  = admin ? 'flex'        : 'none';
 
     iniciarOnline();
     navTo('tarefas');
@@ -278,6 +279,7 @@ function navTo(pageName) {
     if (pageName === 'usuarios')   carregarUsuarios();
     if (pageName === 'dashboard')  carregarDashboard();
     if (pageName === 'lixeira')    carregarLixeira();
+    if (pageName === 'changelog')  carregarChangelog();
 }
 
 // ─────────────────────────────────────────
@@ -1821,4 +1823,123 @@ function toast(msg, tipo = 'success') {
     el.style.display = 'flex';
     clearTimeout(window._toastTimer);
     window._toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+// ─────────────────────────────────────────
+// CHANGELOG
+// ─────────────────────────────────────────
+const CHANGELOG_META = {
+    feature:     { emoji: '✨', label: 'Nova funcionalidade', cls: 'cat-feature' },
+    fix:         { emoji: '🐛', label: 'Correção de erro',    cls: 'cat-fix' },
+    improvement: { emoji: '⚡', label: 'Melhoria',            cls: 'cat-improvement' },
+    removed:     { emoji: '🗑️', label: 'Removido',            cls: 'cat-removed' }
+};
+
+async function carregarChangelog() {
+    const list  = document.getElementById('changelog-list');
+    const empty = document.getElementById('changelog-empty');
+    list.innerHTML = '<p style="color:var(--text-dim);font-size:13px;padding:20px 0">Carregando...</p>';
+    empty.style.display = 'none';
+
+    const res = await api('/api/changelog');
+    if (!res.ok) { list.innerHTML = ''; return; }
+    const entradas = await res.json();
+
+    if (!entradas.length) {
+        list.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+
+    const isAdmin = usuarioLogado && (usuarioLogado.tipo_perfil === 'Administrador' || usuarioLogado.tipo_perfil === 'Admin Master');
+
+    // Agrupa por data (dd/mm/yyyy)
+    const grupos = {};
+    for (const e of entradas) {
+        const dia = e.criado_em.split(' ')[0];
+        if (!grupos[dia]) grupos[dia] = [];
+        grupos[dia].push(e);
+    }
+
+    list.innerHTML = Object.entries(grupos).map(([dia, items]) => `
+        <div class="changelog-grupo">
+            <div class="changelog-dia">${formatarDiaChangelog(dia)}</div>
+            ${items.map(e => {
+                const meta = CHANGELOG_META[e.categoria] || { emoji: '📌', label: e.categoria, cls: '' };
+                return `
+                <div class="changelog-entry" id="cl-entry-${e.id}">
+                    <div class="changelog-entry-left">
+                        <span class="changelog-emoji">${meta.emoji}</span>
+                    </div>
+                    <div class="changelog-entry-body">
+                        <div class="changelog-entry-header">
+                            <span class="changelog-cat-badge ${meta.cls}">${meta.label}</span>
+                            <span class="changelog-hora">${e.criado_em.split(' ')[1]} · por ${escapar(e.autor_nome)}</span>
+                        </div>
+                        <p class="changelog-titulo">${escapar(e.titulo)}</p>
+                        ${e.descricao ? `<p class="changelog-desc">${escapar(e.descricao)}</p>` : ''}
+                    </div>
+                    ${isAdmin ? `
+                    <button class="changelog-del" onclick="excluirChangelog(${e.id})" title="Remover entrada">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                            <path d="M10 11v6M14 11v6"/>
+                        </svg>
+                    </button>` : ''}
+                </div>`;
+            }).join('')}
+        </div>
+    `).join('');
+}
+
+function formatarDiaChangelog(dia) {
+    // dia = 'dd/mm/yyyy'
+    const [d, m, y] = dia.split('/');
+    const data  = new Date(+y, +m - 1, +d);
+    const hoje  = new Date();
+    const ontem = new Date(); ontem.setDate(hoje.getDate() - 1);
+    const fmt   = data.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (data.toDateString() === hoje.toDateString())  return `Hoje · ${fmt}`;
+    if (data.toDateString() === ontem.toDateString()) return `Ontem · ${fmt}`;
+    return fmt.charAt(0).toUpperCase() + fmt.slice(1);
+}
+
+function abrirModalNovoChangelog() {
+    document.getElementById('cl-titulo').value    = '';
+    document.getElementById('cl-descricao').value = '';
+    document.getElementById('cl-error').style.display = 'none';
+    // Seleciona 'feature' por padrão
+    document.querySelector('input[name="cl-categoria"][value="feature"]').checked = true;
+    abrirModal('modal-novo-changelog');
+}
+
+async function salvarChangelog() {
+    const categoria = document.querySelector('input[name="cl-categoria"]:checked')?.value || '';
+    const titulo    = document.getElementById('cl-titulo').value.trim();
+    const descricao = document.getElementById('cl-descricao').value.trim();
+    const errEl     = document.getElementById('cl-error');
+    errEl.style.display = 'none';
+
+    if (!titulo) {
+        errEl.textContent   = 'O título é obrigatório.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const res = await api('/api/changelog', 'POST', { categoria, titulo, descricao });
+    if (res.ok) {
+        fecharModal('modal-novo-changelog');
+        toast('✅ Entrada publicada!', 'success');
+        carregarChangelog();
+    } else {
+        const e = await res.json();
+        errEl.textContent   = e.erro || 'Erro ao salvar.';
+        errEl.style.display = 'block';
+    }
+}
+
+async function excluirChangelog(id) {
+    if (!confirm('Remover esta entrada do changelog?')) return;
+    const res = await api(`/api/changelog/${id}`, 'DELETE');
+    if (res.ok) { toast('Entrada removida', 'success'); carregarChangelog(); }
+    else toast('Erro ao remover', 'error');
 }
