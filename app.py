@@ -335,6 +335,34 @@ class ChangelogEntry(db.Model):
         }
 
 
+class Ticket(db.Model):
+    __tablename__ = 'tickets'
+    id          = db.Column(db.Integer, primary_key=True)
+    tipo        = db.Column(db.String(20), nullable=False)    # erro | sugestao | outro
+    descricao   = db.Column(db.Text, nullable=False)
+    status      = db.Column(db.String(20), default='aberto')  # aberto | em_analise | resolvido
+    resposta    = db.Column(db.Text, nullable=True)
+    empresa     = db.Column(db.String(100), nullable=True)
+    criado_por  = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    criado_em   = db.Column(db.DateTime, default=agora_br)
+    resolvido_em= db.Column(db.DateTime, nullable=True)
+    autor       = db.relationship('Usuario', foreign_keys=[criado_por])
+
+    def to_dict(self):
+        return {
+            'id':           self.id,
+            'tipo':         self.tipo,
+            'descricao':    self.descricao,
+            'status':       self.status,
+            'resposta':     self.resposta or '',
+            'empresa':      self.empresa or '',
+            'criado_por':   self.criado_por,
+            'autor_nome':   self.autor.nome if self.autor else '?',
+            'criado_em':    self.criado_em.strftime('%d/%m/%Y %H:%M'),
+            'resolvido_em': self.resolvido_em.strftime('%d/%m/%Y %H:%M') if self.resolvido_em else None,
+        }
+
+
 # ─────────────────────────────────────────
 # EMAIL HELPERS
 # ─────────────────────────────────────────
@@ -1827,6 +1855,72 @@ def excluir_changelog(entry_id):
     db.session.delete(entrada)
     safe_commit()
     return jsonify({'mensagem': 'Entrada removida'}), 200
+
+
+# ─────────────────────────────────────────
+# TICKETS (feedback / bugs / sugestões)
+# ─────────────────────────────────────────
+@app.route('/api/tickets', methods=['POST'])
+@login_required
+def criar_ticket():
+    u    = usuario_atual()
+    dados = request.json or {}
+    tipo  = dados.get('tipo', '').strip()
+    desc  = dados.get('descricao', '').strip()
+    if tipo not in ('erro', 'sugestao', 'outro'):
+        return jsonify({'erro': 'Tipo inválido'}), 400
+    if not desc:
+        return jsonify({'erro': 'Descrição obrigatória'}), 400
+    t = Ticket(tipo=tipo, descricao=desc, empresa=u.empresa, criado_por=u.id)
+    db.session.add(t)
+    safe_commit()
+    return jsonify(t.to_dict()), 201
+
+
+@app.route('/api/tickets', methods=['GET'])
+@login_required
+def listar_tickets():
+    u = usuario_atual()
+    if not u.is_master():
+        return jsonify({'erro': 'Acesso negado'}), 403
+    tickets = Ticket.query.order_by(Ticket.criado_em.desc()).all()
+    return jsonify([t.to_dict() for t in tickets])
+
+
+@app.route('/api/tickets/<int:tid>', methods=['PATCH'])
+@login_required
+def atualizar_ticket(tid):
+    u = usuario_atual()
+    if not u.is_master():
+        return jsonify({'erro': 'Acesso negado'}), 403
+    ticket = db.session.get(Ticket, tid)
+    if not ticket:
+        return jsonify({'erro': 'Ticket não encontrado'}), 404
+    dados   = request.json or {}
+    if 'status' in dados and dados['status'] in ('aberto', 'em_analise', 'resolvido'):
+        ticket.status = dados['status']
+        if dados['status'] == 'resolvido' and not ticket.resolvido_em:
+            ticket.resolvido_em = agora_br()
+        elif dados['status'] != 'resolvido':
+            ticket.resolvido_em = None
+    if 'resposta' in dados:
+        ticket.resposta = dados['resposta'].strip()
+    safe_commit()
+    return jsonify(ticket.to_dict())
+
+
+@app.route('/api/tickets/<int:tid>', methods=['DELETE'])
+@login_required
+def excluir_ticket(tid):
+    u = usuario_atual()
+    if not u.is_master():
+        return jsonify({'erro': 'Acesso negado'}), 403
+    ticket = db.session.get(Ticket, tid)
+    if not ticket:
+        return jsonify({'erro': 'Ticket não encontrado'}), 404
+    db.session.delete(ticket)
+    safe_commit()
+    return jsonify({'mensagem': 'Ticket excluído'})
 
 
 if __name__ == '__main__':

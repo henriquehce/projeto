@@ -258,10 +258,12 @@ function entrarNoApp() {
     document.getElementById('nav-usuarios-item').style.display   = admin ? 'block'       : 'none';
     document.getElementById('nav-dashboard-item').style.display  = admin ? 'block'       : 'none';
     document.getElementById('nav-lixeira-item').style.display    = admin ? 'block'       : 'none';
+    document.getElementById('nav-tickets-item').style.display    = master ? 'block'      : 'none';
     document.getElementById('btn-relatorio').style.display       = admin ? 'inline-flex' : 'none';
     document.getElementById('btn-novo-changelog').style.display  = admin ? 'flex'        : 'none';
 
     iniciarOnline();
+    if (master) atualizarBadgeTickets();
     navTo('tarefas');
     carregarTarefas();
 }
@@ -280,6 +282,7 @@ function navTo(pageName) {
     if (pageName === 'dashboard')  carregarDashboard();
     if (pageName === 'lixeira')    carregarLixeira();
     if (pageName === 'changelog')  carregarChangelog();
+    if (pageName === 'tickets')    carregarTickets();
 }
 
 // ─────────────────────────────────────────
@@ -1942,4 +1945,151 @@ async function excluirChangelog(id) {
     const res = await api(`/api/changelog/${id}`, 'DELETE');
     if (res.ok) { toast('Entrada removida', 'success'); carregarChangelog(); }
     else toast('Erro ao remover', 'error');
+}
+
+// ─────────────────────────────────────────
+// TICKETS — FEEDBACK DOS USUÁRIOS
+// ─────────────────────────────────────────
+const TICKET_META = {
+    erro:     { emoji: '🐛', label: 'Erro',      cor: '#ef4444' },
+    sugestao: { emoji: '💡', label: 'Sugestão',  cor: '#f59e0b' },
+    outro:    { emoji: '📋', label: 'Outro',      cor: '#64748b' },
+};
+const TICKET_STATUS_META = {
+    aberto:     { emoji: '🔴', label: 'Aberto' },
+    em_analise: { emoji: '🟡', label: 'Em análise' },
+    resolvido:  { emoji: '🟢', label: 'Resolvido' },
+};
+
+let tipoTicketAtual  = 'erro';
+let ticketEditandoId = null;
+
+function abrirModalFeedback() {
+    tipoTicketAtual = 'erro';
+    document.getElementById('feedback-descricao').value = '';
+    document.querySelectorAll('.ticket-tipo-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tipo === 'erro');
+    });
+    abrirModal('modal-feedback');
+}
+
+function selecionarTipoTicket(tipo) {
+    tipoTicketAtual = tipo;
+    document.querySelectorAll('.ticket-tipo-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tipo === tipo);
+    });
+}
+
+async function enviarFeedback() {
+    const desc = document.getElementById('feedback-descricao').value.trim();
+    if (!desc) { toast('Descreva o problema ou sugestão', 'error'); return; }
+    const res = await api('/api/tickets', 'POST', { tipo: tipoTicketAtual, descricao: desc });
+    if (res.ok) {
+        fecharModal('modal-feedback');
+        toast('✅ Feedback enviado! Obrigado.', 'success');
+        // Atualiza badge se for master
+        if (isMaster()) atualizarBadgeTickets();
+    } else {
+        const e = await res.json();
+        toast(e.erro || 'Erro ao enviar', 'error');
+    }
+}
+
+async function carregarTickets() {
+    const res = await api('/api/tickets');
+    if (!res.ok) return;
+    const tickets = await res.json();
+
+    const filtroStatus = document.getElementById('tickets-filtro-status')?.value || '';
+    const filtroTipo   = document.getElementById('tickets-filtro-tipo')?.value   || '';
+
+    const filtrados = tickets.filter(t =>
+        (!filtroStatus || t.status === filtroStatus) &&
+        (!filtroTipo   || t.tipo   === filtroTipo)
+    );
+
+    const lista  = document.getElementById('tickets-list');
+    const empty  = document.getElementById('tickets-empty');
+
+    // Atualiza badge com total de abertos
+    const abertos = tickets.filter(t => t.status === 'aberto').length;
+    const badge = document.getElementById('nav-tickets-badge');
+    if (badge) {
+        badge.textContent  = abertos;
+        badge.style.display = abertos > 0 ? 'inline-block' : 'none';
+    }
+
+    if (!filtrados.length) {
+        lista.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+
+    lista.innerHTML = filtrados.map(t => {
+        const meta   = TICKET_META[t.tipo]   || TICKET_META.outro;
+        const stMeta = TICKET_STATUS_META[t.status] || { emoji: '⚪', label: t.status };
+        return `
+        <div class="ticket-card" onclick="abrirTicket(${t.id})">
+            <div class="ticket-card-header">
+                <span class="ticket-tipo-badge" style="color:${meta.cor}">${meta.emoji} ${meta.label}</span>
+                <span class="ticket-status-badge ticket-status-${t.status}">${stMeta.emoji} ${stMeta.label}</span>
+            </div>
+            <p class="ticket-desc">${escapar(t.descricao)}</p>
+            <div class="ticket-card-footer">
+                <span>👤 ${escapar(t.autor_nome)}</span>
+                ${t.empresa ? `<span>🏢 ${escapar(t.empresa)}</span>` : ''}
+                <span>📅 ${t.criado_em}</span>
+                ${t.resolvido_em ? `<span style="color:var(--green)">✅ ${t.resolvido_em}</span>` : ''}
+            </div>
+            ${t.resposta ? `<div class="ticket-resposta">💬 ${escapar(t.resposta)}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+async function atualizarBadgeTickets() {
+    if (!isMaster()) return;
+    const res = await api('/api/tickets');
+    if (!res.ok) return;
+    const tickets = await res.json();
+    const abertos = tickets.filter(t => t.status === 'aberto').length;
+    const badge = document.getElementById('nav-tickets-badge');
+    if (badge) {
+        badge.textContent   = abertos;
+        badge.style.display = abertos > 0 ? 'inline-block' : 'none';
+    }
+}
+
+function abrirTicket(id) {
+    ticketEditandoId = id;
+    // Busca o ticket da lista já carregada no DOM pela API
+    api('/api/tickets').then(r => r.json()).then(tickets => {
+        const t = tickets.find(x => x.id === id);
+        if (!t) return;
+        const meta   = TICKET_META[t.tipo]   || TICKET_META.outro;
+        document.getElementById('ticket-modal-titulo').textContent =
+            `${meta.emoji} Ticket #${t.id} — ${meta.label}`;
+        document.getElementById('ticket-modal-info').innerHTML =
+            `<strong>De:</strong> ${escapar(t.autor_nome)}${t.empresa ? ` · ${escapar(t.empresa)}` : ''}<br>
+             <strong>Em:</strong> ${t.criado_em}<br><br>
+             <span style="white-space:pre-wrap">${escapar(t.descricao)}</span>`;
+        document.getElementById('ticket-modal-resposta').value = t.resposta || '';
+        document.getElementById('ticket-modal-status').value   = t.status;
+        abrirModal('modal-ticket');
+    });
+}
+
+async function salvarTicket() {
+    if (!ticketEditandoId) return;
+    const status   = document.getElementById('ticket-modal-status').value;
+    const resposta = document.getElementById('ticket-modal-resposta').value.trim();
+    const res = await api(`/api/tickets/${ticketEditandoId}`, 'PATCH', { status, resposta });
+    if (res.ok) {
+        fecharModal('modal-ticket');
+        toast('Ticket atualizado', 'success');
+        carregarTickets();
+    } else {
+        const e = await res.json();
+        toast(e.erro || 'Erro', 'error');
+    }
 }

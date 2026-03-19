@@ -1,829 +1,2202 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0f172a">
-    <meta name="description" content="TaskFlow — Sistema de Controle de Tarefas">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TaskFlow">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-    <title>TaskFlow</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        .senha-strength { margin-top: 8px; margin-bottom: 4px; }
-        .strength-bar-wrap { display: flex; gap: 4px; margin-bottom: 6px; }
-        .strength-bar-wrap .bar { flex: 1; height: 4px; border-radius: 99px; background: var(--border); transition: background 0.3s; }
-        .strength-bar-wrap .bar.active-1 { background: #ef4444; }
-        .strength-bar-wrap .bar.active-2 { background: #f97316; }
-        .strength-bar-wrap .bar.active-3 { background: #eab308; }
-        .strength-bar-wrap .bar.active-4 { background: #22c55e; }
-        .strength-label { font-size: 11px; font-weight: 600; letter-spacing: .04em; margin-bottom: 8px; }
-        .strength-label.s1 { color: #ef4444; } .strength-label.s2 { color: #f97316; }
-        .strength-label.s3 { color: #eab308; } .strength-label.s4 { color: #22c55e; }
-        .senha-checklist { list-style: none; padding: 0; margin: 0 0 8px 0; display: flex; flex-direction: column; gap: 4px; }
-        .senha-checklist li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); transition: color 0.2s; }
-        .senha-checklist li.ok { color: #22c55e; }
-        .senha-checklist li .chk-icon { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 9px; }
-        .senha-checklist li.ok .chk-icon { background: #22c55e; border-color: #22c55e; color: #fff; }
-        .toggle-wrap { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; user-select: none; }
-        .toggle-wrap input[type=checkbox] { display: none; }
-        .toggle-track { width: 40px; height: 22px; background: var(--border2); border-radius: 11px; position: relative; transition: background 0.2s; flex-shrink: 0; }
-        .toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform 0.2s; }
-        .toggle-wrap.on .toggle-track { background: var(--accent); }
-        .toggle-wrap.on .toggle-track::after { transform: translateX(18px); }
-        .toggle-label { font-size: 14px; color: var(--text); line-height: 1.3; }
-        .toggle-sublabel { font-size: 12px; color: var(--text-muted); }
-    </style>
-</head>
-<body>
+/* ═══════════════════════════════════════
+   TASKFLOW — CSS PRINCIPAL
+   Estética: Dark Industrial / Minimalista
+═══════════════════════════════════════ */
 
-<div id="screen-login" class="screen active">
-    <div class="login-bg">
-        <div class="login-orb orb1"></div>
-        <div class="login-orb orb2"></div>
-        <div class="login-orb orb3"></div>
-    </div>
-    <div class="login-card">
-        <div class="login-logo">
-            <div class="logo-mark">TF</div>
-            <div>
-                <h1 class="logo-title">TaskFlow</h1>
-                <p class="logo-sub">Sistema de Tarefas</p>
-            </div>
-        </div>
-        <div class="login-form">
-            <label class="field-label">E-mail</label>
-            <input type="email" id="login-email" class="field-input" placeholder="seuemail@empresa.com" autocomplete="email">
-            <label class="field-label">Senha</label>
-            <div class="input-password-wrap">
-                <input type="password" id="login-senha" class="field-input" placeholder="••••••••" autocomplete="current-password">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('login-senha', this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-            </div>
-            <div id="login-error" class="error-msg" style="display:none"></div>
-            <button class="btn-primary full" onclick="realizarLogin()">
-                <span>Entrar</span>
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </button>
-        </div>
-    </div>
-</div>
-
-<div id="screen-app" class="screen">
-    <header class="app-header">
-        <div class="header-left">
-            <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu"><span></span><span></span><span></span></button>
-            <div class="header-brand">
-                <span class="header-logo">TF</span>
-                <span class="header-title">TaskFlow</span>
-            </div>
-        </div>
-        <div class="header-right">
-            <div id="header-badge" class="perfil-badge"></div>
-            <button class="btn-theme" id="btn-theme" onclick="toggleTema()" title="Alternar tema">
-                <svg id="theme-icon-moon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                <svg id="theme-icon-sun" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                <span id="theme-label">Claro</span>
-            </button>
-            <button class="avatar-btn" onclick="toggleUserMenu()" id="avatar-btn"><span id="avatar-initials">?</span></button>
-            <div id="user-menu" class="user-menu" style="display:none">
-                <div class="user-menu-info">
-                    <p id="menu-nome" class="menu-nome"></p>
-                    <p id="menu-funcao" class="menu-funcao"></p>
-                </div>
-                <hr class="menu-divider">
-                <button onclick="abrirModal('modal-trocar-senha')" class="menu-item">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    Trocar Senha
-                </button>
-                <button onclick="abrirModal('modal-trocar-email')" class="menu-item">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                    Trocar E-mail
-                </button>
-                <hr class="menu-divider">
-                <button onclick="fazerLogout()" class="menu-item menu-logout">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-                    Sair
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
-    <nav id="sidebar" class="sidebar">
-        <div class="sidebar-header">
-            <span class="sidebar-title">Menu</span>
-            <button onclick="toggleSidebar()" class="close-sidebar">✕</button>
-        </div>
-        <ul class="sidebar-nav">
-            <li><a onclick="navTo('tarefas')" class="nav-item active" data-page="tarefas">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                Tarefas
-            </a></li>
-            <li id="nav-dashboard-item" style="display:none"><a onclick="navTo('dashboard')" class="nav-item" data-page="dashboard">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                Dashboard
-            </a></li>
-            <li id="nav-usuarios-item" style="display:none"><a onclick="navTo('usuarios')" class="nav-item" data-page="usuarios">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                Usuários
-            </a></li>
-            <li id="nav-lixeira-item" style="display:none"><a onclick="navTo('lixeira')" class="nav-item" data-page="lixeira">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                Lixeira
-            </a></li>
-            <li><a onclick="navTo('changelog')" class="nav-item" data-page="changelog">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                Changelog
-            </a></li>
-        </ul>
-        <div class="sidebar-install" id="pwa-install-btn" style="display:none">
-            <button onclick="instalarPWA()" class="btn-install">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                Instalar App
-            </button>
-        </div>
-    </nav>
-
-    <main class="app-main">
-        <div id="page-tarefas" class="page active">
-            <div class="page-header">
-                <div>
-                    <h2 class="page-title">Tarefas</h2>
-                    <p class="page-sub" id="tarefas-sub">Carregando...</p>
-                </div>
-                <button id="btn-nova-tarefa" class="btn-primary" onclick="abrirModalNovaTarefa()" style="display:none">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                    Nova Tarefa
-                </button>
-                <button id="btn-relatorio" class="btn-ghost" onclick="abrirRelatorio()" style="display:none" title="Relatório de pendências">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                    Relatório
-                </button>
-            </div>
-
-            <div class="search-filter-bar">
-                <div class="search-wrap">
-                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                    <input type="text" id="busca-tarefas" class="search-input" placeholder="Buscar por descrição, responsável ou #número..." oninput="buscarTarefas(this.value)">
-                </div>
-            </div>
-            <div class="filters-bar">
-                <button class="filter-chip active" data-status="todos" onclick="filtrarStatus('todos', this)">Todas</button>
-                <button class="filter-chip" data-status="Não iniciado" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
-                <button class="filter-chip" data-status="Iniciado" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
-                <button class="filter-chip" data-status="Em andamento" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
-                <button class="filter-chip" data-status="Pausado" onclick="filtrarStatus('Pausado', this)">Pausado</button>
-                <button class="filter-chip" data-status="Aguardo retorno" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
-                <button class="filter-chip" data-status="Finalizado" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
-            </div>
-
-            <div id="tasks-grid" class="tasks-grid"></div>
-            <div id="tasks-empty" class="empty-state" style="display:none">
-                <div class="empty-icon">📋</div>
-                <p>Nenhuma tarefa encontrada</p>
-            </div>
-        </div>
-
-        <div id="page-usuarios" class="page">
-            <div class="page-header">
-                <div>
-                    <h2 class="page-title">Usuários</h2>
-                    <p class="page-sub">Gerencie os perfis do sistema</p>
-                </div>
-                <button class="btn-primary" onclick="abrirModalNovoUsuario()">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                    Novo Usuário
-                </button>
-            </div>
-            <div id="usuarios-list" class="usuarios-list"></div>
-        </div>
-
-        <!-- PAGE DASHBOARD -->
-        <div id="page-dashboard" class="page">
-            <div class="page-header">
-                <div>
-                    <h2 class="page-title">Dashboard</h2>
-                    <p class="page-sub">Visão geral · clique nos itens para filtrar</p>
-                </div>
-                <button class="btn-ghost btn-sm" onclick="carregarDashboard(true)" title="Limpar filtros">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                    Resetar filtros
-                </button>
-            </div>
-
-            <!-- Filtros rápidos -->
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-                <select id="dash-filtro-usuario" class="field-select" style="min-width:180px;max-width:240px;font-size:13px;padding:6px 10px" onchange="dashFiltrarUsuarioSelect()">
-                    <option value="">— Todas as pessoas</option>
-                </select>
-                <div style="display:flex;gap:4px">
-                    <button class="dash-periodo-btn active" data-dias="7"  onclick="dashFiltrarPeriodo(7)">7d</button>
-                    <button class="dash-periodo-btn" data-dias="14" onclick="dashFiltrarPeriodo(14)">14d</button>
-                    <button class="dash-periodo-btn" data-dias="30" onclick="dashFiltrarPeriodo(30)">30d</button>
-                    <button class="dash-periodo-btn" data-dias="90" onclick="dashFiltrarPeriodo(90)">90d</button>
-                </div>
-                <div id="dash-filtros-ativos" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-            </div>
-
-            <!-- Cards de totais (clicáveis para filtrar por status) -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">
-                <div class="dash-card" data-status="" onclick="dashFiltrarStatus(null)" title="Ver todas">
-                    <div class="dash-card-label">Total</div>
-                    <div class="dash-card-num" id="dash-total">—</div>
-                </div>
-                <div class="dash-card" data-status="Não iniciado" onclick="dashFiltrarStatus('Não iniciado')" style="cursor:pointer">
-                    <div class="dash-card-label" style="color:#94a3b8">Não iniciado</div>
-                    <div class="dash-card-num" id="dash-nao-iniciado" style="color:#94a3b8">—</div>
-                </div>
-                <div class="dash-card" data-status="pendentes" onclick="dashFiltrarStatus('pendentes')" style="cursor:pointer" title="Clique para ver todas as não finalizadas">
-                    <div class="dash-card-label" style="color:var(--yellow)">Pendentes</div>
-                    <div class="dash-card-num" id="dash-pendentes" style="color:var(--yellow)">—</div>
-                </div>
-                <div class="dash-card" data-status="Finalizado" onclick="dashFiltrarStatus('Finalizado')" style="cursor:pointer">
-                    <div class="dash-card-label" style="color:var(--green)">Finalizadas</div>
-                    <div class="dash-card-num" id="dash-finalizadas" style="color:var(--green)">—</div>
-                </div>
-                <div class="dash-card" data-status="" onclick="dashFiltrarStatus(null)" style="cursor:pointer">
-                    <div class="dash-card-label" style="color:var(--red)">Alta prioridade</div>
-                    <div class="dash-card-num" id="dash-alta" style="color:var(--red)">—</div>
-                </div>
-            </div>
-
-            <!-- Grid principal -->
-            <div class="dash-grid">
-                <div class="dash-panel">
-                    <h4 class="dash-panel-title">Por status <span style="font-size:10px;font-weight:400;opacity:.6">· clique para filtrar</span></h4>
-                    <div id="dash-barras"></div>
-                </div>
-                <div class="dash-panel">
-                    <h4 class="dash-panel-title">Pendências por pessoa <span style="font-size:10px;font-weight:400;opacity:.6">· clique para filtrar</span></h4>
-                    <div id="dash-ranking"></div>
-                </div>
-                <div class="dash-panel dash-panel-full">
-                    <h4 class="dash-panel-title" id="dash-recentes-titulo">Tarefas mais recentes <span style="font-size:10px;font-weight:400;opacity:.6">· 8 mais recentes · clique para abrir</span></h4>
-                    <div id="dash-recentes"></div>
-                </div>
-                <div class="dash-panel dash-panel-full">
-                    <h4 class="dash-panel-title">Criações por dia</h4>
-                    <div id="dash-grafico" style="padding-top:6px;overflow-x:auto"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- PAGE LIXEIRA -->
-        <div id="page-lixeira" class="page">
-            <div class="page-header">
-                <div>
-                    <h2 class="page-title">Lixeira</h2>
-                    <p class="page-sub">Tarefas excluídas — restaure ou exclua permanentemente</p>
-                </div>
-            </div>
-            <div id="lixeira-list"></div>
-        </div>
-
-        <!-- PAGE CHANGELOG -->
-        <div id="page-changelog" class="page">
-            <div class="page-header">
-                <div>
-                    <h2 class="page-title">Changelog</h2>
-                    <p class="page-sub">Histórico de atualizações do sistema</p>
-                </div>
-                <button id="btn-novo-changelog" class="btn-primary" onclick="abrirModalNovoChangelog()" style="display:none">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                    Nova entrada
-                </button>
-            </div>
-            <div id="changelog-list" class="changelog-list"></div>
-            <div id="changelog-empty" class="empty-state" style="display:none">
-                <div class="empty-icon">📋</div>
-                <p>Nenhuma atualização registrada ainda.</p>
-            </div>
-        </div>
-    </main>
-</div>
-
-<!-- MODAL NOVA TAREFA -->
-<div id="modal-nova-tarefa" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-nova-tarefa')">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>Nova Tarefa</h3>
-            <button onclick="fecharModal('modal-nova-tarefa')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Descrição</label>
-            <textarea id="nova-tarefa-desc" class="field-textarea" placeholder="Descreva a tarefa detalhadamente..." rows="3"></textarea>
-
-            <label class="field-label">Prioridade</label>
-            <select id="nova-tarefa-prio" class="field-select">
-                <option value="Nenhuma" selected>— Sem prioridade</option>
-                <option value="Alta">↑ Alta</option>
-            </select>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <div>
-                    <label class="field-label">Prazo <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
-                    <input type="date" id="nova-tarefa-prazo" class="field-input">
-                </div>
-                <div>
-                    <label class="field-label">Recorrência</label>
-                    <select id="nova-tarefa-recorrente" class="field-select">
-                        <option value="">— Única</option>
-                        <option value="semanal">🔁 Semanal</option>
-                        <option value="mensal">🔁 Mensal</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="secao-responsaveis" style="display:flex;flex-direction:column;gap:8px">
-                <label class="field-label">Responsáveis <span style="color:var(--text-dim);font-weight:400">(colaborativos, opcional — se não informar, a tarefa fica pessoal)</span></label>
-                <div id="responsaveis-criar" class="resp-selector"></div>
-                <label class="field-label" style="margin-top:8px">Admins colaboradores <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
-                <div id="admins-criar" class="resp-selector"></div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-nova-tarefa')" class="btn-ghost">Cancelar</button>
-            <button onclick="criarTarefa()" class="btn-primary">Criar Tarefa</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL CONFIRMAÇÃO GENÉRICO -->
-<div id="modal-confirmacao" class="modal-overlay">
-    <div class="modal-box" style="max-width:400px">
-        <div class="modal-header">
-            <h3 id="confirm-titulo">Confirmar ação</h3>
-        </div>
-        <div class="modal-body">
-            <p id="confirm-msg" style="margin:0;font-size:15px;line-height:1.5;color:var(--text-base)"></p>
-            <p id="confirm-detalhe" style="margin:8px 0 0;font-size:13px;color:var(--text-dim)"></p>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-confirmacao')" class="btn-ghost">Cancelar</button>
-            <button id="confirm-btn-ok" class="btn-danger">Confirmar</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL COMENTÁRIOS -->
-<div id="modal-comentarios" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-comentarios')">
-    <div class="modal-box modal-large">
-        <div class="modal-header">
-            <div>
-                <h3 id="comentario-titulo">Tarefa #</h3>
-                <p id="comentario-desc" class="modal-subtitle"></p>
-            </div>
-            <button onclick="fecharModal('modal-comentarios')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <div class="comments-area" id="comments-area"><p class="comments-empty">Nenhum comentário ainda.</p></div>
-            <div class="comment-input-area">
-                <textarea id="novo-comentario-texto" class="field-textarea" placeholder="Escreva um comentário..." rows="2"></textarea>
-                <button onclick="enviarComentario()" class="btn-primary full">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                    Enviar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL NOVO USUÁRIO -->
-<div id="modal-novo-usuario" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-novo-usuario')">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>Novo Usuário</h3>
-            <button onclick="fecharModal('modal-novo-usuario')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Nome completo</label>
-            <input type="text" id="nu-nome" class="field-input" placeholder="Nome do usuário">
-            <label class="field-label">Função</label>
-            <input type="text" id="nu-funcao" class="field-input" placeholder="Ex: Desenvolvedor, Designer...">
-            <label class="field-label">Setor</label>
-            <select id="nu-setor" class="field-select">
-                <option value="">— Selecione o setor —</option>
-            </select>
-            <label class="field-label">E-mail</label>
-            <input type="email" id="nu-email" class="field-input" placeholder="email@empresa.com">
-            <label class="field-label">Tipo de Perfil</label>
-            <select id="nu-perfil" class="field-select">
-                <option value="Colaborativo">Colaborativo</option>
-                <option value="Administrador">Administrador</option>
-            </select>
-            <label class="field-label">Senha inicial</label>
-            <div class="input-password-wrap">
-                <input type="password" id="nu-senha" class="field-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" oninput="atualizarForcaSenha('nu-senha','nu-strength')">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('nu-senha', this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-            </div>
-            <div class="senha-strength" id="nu-strength" style="display:none">
-                <div class="strength-bar-wrap"><div class="bar" id="nu-bar1"></div><div class="bar" id="nu-bar2"></div><div class="bar" id="nu-bar3"></div><div class="bar" id="nu-bar4"></div></div>
-                <div class="strength-label" id="nu-strength-label"></div>
-                <ul class="senha-checklist">
-                    <li id="nu-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
-                    <li id="nu-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
-                    <li id="nu-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
-                    <li id="nu-r4"><span class="chk-icon">✓</span> Número</li>
-                    <li id="nu-r5"><span class="chk-icon">✓</span> Caractere especial (!@#$%...)</li>
-                </ul>
-            </div>
-            <p style="font-size:12px;color:var(--text-muted);margin-top:4px">O colaborativo será solicitado a trocar no primeiro acesso.</p>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-novo-usuario')" class="btn-ghost">Cancelar</button>
-            <button onclick="criarUsuario()" class="btn-primary">Cadastrar</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL RESPONSÁVEIS -->
-<div id="modal-responsaveis" class="modal-overlay" onclick="fecharModalSeFora(event, 'modal-responsaveis')">
-    <div class="modal-box">
-        <div class="modal-header">
-            <div>
-                <h3 id="modal-resp-titulo">Responsáveis</h3>
-                <p class="modal-subtitle">Colaborativos e admins colaboradores</p>
-            </div>
-            <button onclick="fecharModal('modal-responsaveis')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Colaborativos</label>
-            <div id="responsaveis-editar" class="resp-selector"></div>
-            <label class="field-label" style="margin-top:12px">Admins colaboradores</label>
-            <div id="admins-editar" class="resp-selector"></div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-responsaveis')" class="btn-ghost">Cancelar</button>
-            <button onclick="salvarResponsaveis()" class="btn-primary">Salvar</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL EDITAR USUÁRIO (Admin Master) -->
-<div id="modal-editar-usuario" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-editar-usuario')">
-    <div class="modal-box">
-        <div class="modal-header">
-            <div>
-                <h3 id="eu-titulo">Editar Usuário</h3>
-                <p class="modal-subtitle" id="eu-email" style="color:var(--text-dim);font-size:12px"></p>
-            </div>
-            <button onclick="fecharModal('modal-editar-usuario')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Nome completo</label>
-            <input type="text" id="eu-nome" class="field-input" placeholder="Nome do usuário">
-
-            <label class="field-label">Cargo / Função</label>
-            <input type="text" id="eu-funcao" class="field-input" placeholder="Ex: Desenvolvedor, Designer...">
-
-            <label class="field-label">Setor <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
-            <select id="eu-setor" class="field-select">
-                <option value="">— Selecione o setor —</option>
-            </select>
-
-            <label class="field-label">Tipo de Perfil</label>
-            <select id="eu-perfil" class="field-select">
-                <option value="Colaborativo">Colaborativo</option>
-                <option value="Administrador">Administrador</option>
-            </select>
-
-            <div id="eu-error" class="error-msg" style="display:none"></div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-editar-usuario')" class="btn-ghost">Cancelar</button>
-            <button onclick="salvarEdicaoUsuario()" class="btn-primary">Salvar</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL TROCAR SENHA -->
-<div id="modal-trocar-senha" class="modal-overlay">
-    <div class="modal-box">
-        <div class="modal-header">
-            <div>
-                <h3>Trocar Senha</h3>
-                <p class="modal-subtitle" id="trocar-senha-aviso" style="display:none;color:#f59e0b">⚠️ Você precisa trocar sua senha antes de continuar.</p>
-            </div>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Senha atual</label>
-            <div class="input-password-wrap">
-                <input type="password" id="ts-atual" class="field-input" placeholder="Sua senha atual">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-atual',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            </div>
-            <label class="field-label">Nova senha</label>
-            <div class="input-password-wrap">
-                <input type="password" id="ts-nova" class="field-input" placeholder="Mínimo 8 caracteres" oninput="atualizarForcaSenha('ts-nova','ts-strength')">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-nova',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            </div>
-            <div class="senha-strength" id="ts-strength" style="display:none">
-                <div class="strength-bar-wrap"><div class="bar" id="ts-bar1"></div><div class="bar" id="ts-bar2"></div><div class="bar" id="ts-bar3"></div><div class="bar" id="ts-bar4"></div></div>
-                <div class="strength-label" id="ts-strength-label"></div>
-                <ul class="senha-checklist">
-                    <li id="ts-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
-                    <li id="ts-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
-                    <li id="ts-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
-                    <li id="ts-r4"><span class="chk-icon">✓</span> Número</li>
-                    <li id="ts-r5"><span class="chk-icon">✓</span> Caractere especial (!@#$%...)</li>
-                </ul>
-            </div>
-            <label class="field-label">Confirmar nova senha</label>
-            <div class="input-password-wrap">
-                <input type="password" id="ts-conf" class="field-input" placeholder="Repita a nova senha">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('ts-conf',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            </div>
-            <div id="ts-error" class="error-msg" style="display:none"></div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-trocar-senha')" class="btn-ghost">Cancelar</button>
-            <button onclick="salvarTrocaSenha()" class="btn-primary">Salvar Senha</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL REDEFINIR SENHA -->
-<div id="modal-redefinir-senha" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-redefinir-senha')">
-    <div class="modal-box">
-        <div class="modal-header">
-            <div>
-                <h3 id="rd-titulo">Redefinir Senha</h3>
-                <p class="modal-subtitle">O usuário deverá trocar no próximo acesso.</p>
-            </div>
-            <button onclick="fecharModal('modal-redefinir-senha')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Nova senha</label>
-            <div class="input-password-wrap">
-                <input type="password" id="rd-nova" class="field-input" placeholder="Mínimo 8 caracteres" oninput="atualizarForcaSenha('rd-nova','rd-strength')">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-nova',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            </div>
-            <div class="senha-strength" id="rd-strength" style="display:none">
-                <div class="strength-bar-wrap"><div class="bar" id="rd-bar1"></div><div class="bar" id="rd-bar2"></div><div class="bar" id="rd-bar3"></div><div class="bar" id="rd-bar4"></div></div>
-                <div class="strength-label" id="rd-strength-label"></div>
-                <ul class="senha-checklist">
-                    <li id="rd-r1"><span class="chk-icon">✓</span> Mínimo 8 caracteres</li>
-                    <li id="rd-r2"><span class="chk-icon">✓</span> Letra maiúscula</li>
-                    <li id="rd-r3"><span class="chk-icon">✓</span> Letra minúscula</li>
-                    <li id="rd-r4"><span class="chk-icon">✓</span> Número</li>
-                    <li id="rd-r5"><span class="chk-icon">✓</span> Caractere especial (!@#$%...)</li>
-                </ul>
-            </div>
-            <label class="field-label">Confirmar senha</label>
-            <div class="input-password-wrap">
-                <input type="password" id="rd-conf" class="field-input" placeholder="Repita a senha">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('rd-conf',this)" tabindex="-1"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            </div>
-            <div id="rd-error" class="error-msg" style="display:none"></div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-redefinir-senha')" class="btn-ghost">Cancelar</button>
-            <button onclick="salvarRedefinicaoSenha()" class="btn-primary">Redefinir</button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL NOVO CHANGELOG -->
-<div id="modal-novo-changelog" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-novo-changelog')">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h3>Nova entrada no Changelog</h3>
-            <button onclick="fecharModal('modal-novo-changelog')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Categoria</label>
-            <div class="changelog-cat-select" id="changelog-cat-select">
-                <label class="cat-option" data-value="feature">
-                    <input type="radio" name="cl-categoria" value="feature" checked>
-                    <span class="cat-pill cat-feature">✨ Nova funcionalidade</span>
-                </label>
-                <label class="cat-option" data-value="fix">
-                    <input type="radio" name="cl-categoria" value="fix">
-                    <span class="cat-pill cat-fix">🐛 Correção de erro</span>
-                </label>
-                <label class="cat-option" data-value="improvement">
-                    <input type="radio" name="cl-categoria" value="improvement">
-                    <span class="cat-pill cat-improvement">⚡ Melhoria</span>
-                </label>
-                <label class="cat-option" data-value="removed">
-                    <input type="radio" name="cl-categoria" value="removed">
-                    <span class="cat-pill cat-removed">🗑️ Removido</span>
-                </label>
-            </div>
-            <label class="field-label">Título</label>
-            <input type="text" id="cl-titulo" class="field-input" placeholder="Ex: Adicionada busca por texto nas tarefas">
-            <label class="field-label">Descrição <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
-            <textarea id="cl-descricao" class="field-textarea" rows="3" placeholder="Detalhe o que foi alterado..."></textarea>
-            <div id="cl-error" class="error-msg" style="display:none"></div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-novo-changelog')" class="btn-ghost">Cancelar</button>
-            <button onclick="salvarChangelog()" class="btn-primary">Publicar</button>
-        </div>
-    </div>
-</div>
-
-<div id="toast" class="toast" style="display:none"></div>
-
-<script src="/static/js/app.js"></script>
-<script>
-function calcularForca(senha) {
-    const regras = { tamanho: senha.length >= 8, maiuscula: /[A-Z]/.test(senha), minuscula: /[a-z]/.test(senha), numero: /\d/.test(senha), especial: /[!@#$%^&*()\-_=+\[\]{}|;:'",.<>?/`~\\]/.test(senha) };
-    return { regras, score: Object.values(regras).filter(Boolean).length };
+:root {
+    --bg:        #0b0f1a;
+    --surface:   #131929;
+    --surface2:  #1a2235;
+    --border:    #1e2d47;
+    --border2:   #243450;
+    --text:      #e2e8f0;
+    --text-base: #e2e8f0;
+    --text-muted:#6b7fa8;
+    --text-dim:  #3d5070;
+    --accent:    #3b82f6;
+    --accent-h:  #2563eb;
+    --accent-glow: rgba(59,130,246,0.25);
+    --green:     #10b981;
+    --yellow:    #f59e0b;
+    --red:       #ef4444;
+    --admin-clr: #f43f5e;
+    --colab-clr: #10b981;
+    --radius:    12px;
+    --radius-sm: 8px;
+    --shadow:    0 8px 32px rgba(0,0,0,0.4);
+    --trans:     0.18s ease;
 }
 
-function atualizarForcaSenha(inputId, containerId) {
-    const prefixo = containerId.replace('-strength', '');
-    const senha   = document.getElementById(inputId).value;
-    const wrap    = document.getElementById(containerId);
-    if (!senha) { wrap.style.display = 'none'; return; }
-    wrap.style.display = 'block';
-    const { regras, score } = calcularForca(senha);
-    for (let i = 1; i <= 4; i++) {
-        const bar = document.getElementById(`${prefixo}-bar${i}`);
-        bar.className = 'bar';
-        if (score >= i) bar.classList.add(score <= 1 ? 'active-1' : score === 2 ? 'active-2' : score === 3 ? 'active-3' : 'active-4');
-    }
-    const label = document.getElementById(`${prefixo}-strength-label`);
-    label.textContent = ['','Muito fraca','Fraca','Razoável','Boa','Forte'][score];
-    label.className   = `strength-label ${['','s1','s1','s3','s4','s4'][score]}`;
-    const mapa = { r1:'tamanho', r2:'maiuscula', r3:'minuscula', r4:'numero', r5:'especial' };
-    for (const [id, chave] of Object.entries(mapa)) {
-        const li = document.getElementById(`${prefixo}-${id}`);
-        if (li) li.classList.toggle('ok', regras[chave]);
-    }
+/* ── LIGHT MODE ── */
+body.light-mode {
+    --bg:        #f0f4f8;
+    --surface:   #ffffff;
+    --surface2:  #e8edf5;
+    --border:    #d0d9e8;
+    --border2:   #b8c5d9;
+    --text:      #1a2235;
+    --text-base: #1a2235;
+    --text-muted:#5a6a85;
+    --text-dim:  #8a9ab5;
+    --accent:    #2563eb;
+    --accent-h:  #1d4ed8;
+    --accent-glow: rgba(37,99,235,0.2);
+    --shadow:    0 4px 20px rgba(0,0,0,0.1);
 }
-</script>
 
-<!-- MODAL TROCAR E-MAIL -->
-<div id="modal-trocar-email" class="modal-overlay">
-    <div class="modal-box" style="max-width:420px">
-        <div class="modal-header">
-            <h3>Trocar E-mail</h3>
-            <button onclick="fecharModal('modal-trocar-email')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Novo e-mail</label>
-            <input type="email" id="te-email" class="field-input" placeholder="novo@email.com">
-            <label class="field-label" style="margin-top:12px">Confirme sua senha</label>
-            <div class="input-password-wrap">
-                <input type="password" id="te-senha" class="field-input" placeholder="Sua senha atual">
-                <button type="button" class="btn-toggle-pw" onclick="toggleSenhaVisivel('te-senha',this)" tabindex="-1">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-            </div>
-            <div id="te-error" class="error-msg" style="display:none"></div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-trocar-email')" class="btn-ghost">Cancelar</button>
-            <button onclick="salvarTrocaEmail()" class="btn-primary">Salvar E-mail</button>
-        </div>
-    </div>
-</div>
+body.light-mode .app-header {
+    background: rgba(255,255,255,0.92);
+    border-bottom: 1px solid var(--border);
+}
+body.light-mode .sidebar {
+    background: #ffffff;
+}
+body.light-mode .task-card {
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+body.light-mode .task-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+body.light-mode .modal-box {
+    background: #ffffff;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+}
+body.light-mode .tasks-table thead tr {
+    background: #f0f4f8;
+}
+body.light-mode .task-row:hover td {
+    background: #f8fafc;
+}
+body.light-mode .field-input,
+body.light-mode .field-select,
+body.light-mode .task-status-select {
+    background: #f8fafc;
+    color: var(--text);
+    border-color: var(--border);
+}
+body.light-mode .field-select option,
+body.light-mode .task-status-select option {
+    background: #ffffff;
+    color: #1a2235;
+}
+body.light-mode .screen-login-inner {
+    background: #ffffff;
+}
+body.light-mode .perfil-badge.master { background: rgba(124,58,237,0.12); color: #7c3aed; }
+body.light-mode .perfil-badge.admin  { background: rgba(244,63,94,0.12);  color: #e11d48; }
+body.light-mode .perfil-badge.colab  { background: rgba(16,185,129,0.12); color: #059669; }
+body.light-mode .comment-item { background: #f8fafc; }
+body.light-mode .historico-item { background: #f0f4f8; }
+body.light-mode .usuario-card  { background: #f8fafc; }
+body.light-mode .relatorio-pessoa { background: #ffffff; }
+body.light-mode .relatorio-pessoa-header { background: #f0f4f8; }
+body.light-mode .relatorio-table th { background: #f8fafc; }
 
-<!-- MODAL CHECKLIST -->
-<div id="modal-checklist" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-checklist')">
-    <div class="modal-box" style="max-width:560px">
-        <div class="modal-header">
-            <h3 id="checklist-titulo">Checklist</h3>
-            <button onclick="fecharModal('modal-checklist')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <p id="checklist-desc" style="color:var(--text-dim);font-size:13px;margin:0 0 16px;line-height:1.5"></p>
+/* Suave transição ao trocar tema */
+body, body * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
 
-            <!-- Barra de progresso -->
-            <div id="checklist-progresso-wrap" style="display:none;margin-bottom:16px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span style="font-size:12px;color:var(--text-dim);font-weight:600">PROGRESSO</span>
-                    <span id="checklist-pct" style="font-size:12px;font-weight:700"></span>
-                </div>
-                <div style="background:var(--surface2);border-radius:999px;height:8px;overflow:hidden">
-                    <div id="checklist-bar" style="height:100%;border-radius:999px;transition:width 0.3s ease;width:0%"></div>
-                </div>
-            </div>
+/* Botão tema */
+.btn-theme {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+.btn-theme:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
+}
 
-            <!-- Lista de itens -->
-            <div id="checklist-lista" style="margin-bottom:16px"></div>
 
-            <!-- Adicionar novo item (só admins) -->
-            <div id="checklist-add-wrap" style="display:none;gap:8px;align-items:center;border-top:1px solid var(--border);padding-top:16px">
-                <input type="text" id="novo-item-texto" class="field-input" placeholder="Novo item do checklist..."
-                    style="flex:1;margin:0"
-                    onkeydown="if(event.key==='Enter')adicionarItemChecklist()">
-                <button class="btn-primary btn-sm" onclick="adicionarItemChecklist()">+ Adicionar</button>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-checklist')" class="btn-ghost">Fechar</button>
-        </div>
-    </div>
-</div>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<!-- MINI-MODAL: OBSERVAÇÃO AO MARCAR ITEM -->
-<div id="modal-obs-checklist" class="modal-overlay" style="z-index:1100">
-    <div class="modal-box" style="max-width:420px">
-        <div class="modal-header">
-            <h3>Observação (opcional)</h3>
-            <button onclick="fecharModal('modal-obs-checklist')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <p style="color:var(--text-dim);font-size:13px;margin:0 0 12px">Adicione uma observação sobre este item antes de marcar como concluído.</p>
-            <textarea id="obs-texto" class="field-input" rows="3"
-                placeholder="Ex: Aprovado com ressalvas, verificar novamente em 30 dias..."
-                style="resize:vertical"></textarea>
-        </div>
-        <div class="modal-footer">
-            <button onclick="pularObsChecklist()" class="btn-ghost">Pular</button>
-            <button onclick="confirmarObsChecklist()" class="btn-primary">Marcar como concluído</button>
-        </div>
-    </div>
-</div>
+html { font-size: 16px; }
 
-<!-- MODAL ANEXOS -->
-<div id="modal-anexos" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-anexos')">
-    <div class="modal-box" style="max-width:560px">
-        <div class="modal-header">
-            <h3 id="anexos-titulo">Arquivos</h3>
-            <button onclick="fecharModal('modal-anexos')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <div id="anexos-lista" style="min-height:60px;margin-bottom:16px"></div>
-            <div style="border-top:1px solid var(--border);padding-top:16px">
-                <label class="field-label">Anexar novo arquivo</label>
-                <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px">PDF, Word, Excel, PowerPoint, imagens, ZIP · Máx. 25MB</p>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="file" id="anexo-input" style="flex:1;font-size:13px;color:var(--text-base)">
-                    <button class="btn-primary btn-sm" onclick="enviarAnexo()">Enviar</button>
-                </div>
-                <p id="anexo-progresso" style="display:none;font-size:12px;color:var(--accent);margin-top:8px"></p>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-anexos')" class="btn-ghost">Fechar</button>
-        </div>
-    </div>
-</div>
+body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: clip; /* clip instead of hidden - allows child overflow-x:auto to work */
+    -webkit-font-smoothing: antialiased;
+}
 
-<!-- MODAL RELATÓRIO DE PENDÊNCIAS -->
-<div id="modal-relatorio" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-relatorio')">
-    <div class="modal-box" style="max-width:800px;max-height:90vh">
-        <div class="modal-header" style="gap:8px">
-            <div style="min-width:0">
-                <h3 style="font-size:clamp(14px,4vw,18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📊 Relatório de Pendências</h3>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                <button class="btn-ghost btn-sm rel-btn-acao" onclick="imprimirRelatorio()" title="Imprimir">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    <span class="rel-btn-label">Imprimir</span>
-                </button>
-                <button class="btn-ghost btn-sm rel-btn-acao" onclick="exportarRelatorioExcel()" title="Exportar Excel" style="color:var(--green)">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-                    <span class="rel-btn-label">Excel</span>
-                </button>
-                <button onclick="fecharModal('modal-relatorio')" class="modal-close">✕</button>
-            </div>
-        </div>
-        <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
-            <label style="font-size:12px;color:var(--text-dim);white-space:nowrap" class="rel-filtro-label">Filtrar por pessoa:</label>
-            <select id="relatorio-filtro-usuario" class="field-select" style="flex:1;padding:6px 10px;font-size:13px" onchange="aplicarFiltroRelatorio()">
-                <option value="">— Todos</option>
-            </select>
-        </div>
-        <div class="modal-body" id="relatorio-corpo" style="overflow-y:auto;max-height:calc(90vh - 130px);padding:0">
-        </div>
-    </div>
-</div>
+/* ── SCREENS ── */
+.screen { display: none; min-height: 100vh; }
+.screen.active { display: flex; }
 
-<!-- MODAL LOG DE ACESSOS -->
-<div id="modal-log-acessos" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-log-acessos')">
-    <div class="modal-box" style="max-width:480px">
-        <div class="modal-header">
-            <div>
-                <h3>🕐 Log de Acessos</h3>
-                <p class="modal-subtitle" id="log-acessos-nome"></p>
-            </div>
-            <button onclick="fecharModal('modal-log-acessos')" class="modal-close">✕</button>
-        </div>
-        <div style="padding:10px 24px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <label style="font-size:12px;color:var(--text-dim)">De:</label>
-            <input type="date" id="log-de" class="field-input" style="flex:1;min-width:120px;padding:5px 8px;font-size:12px" onchange="_carregarLogAcessos()">
-            <label style="font-size:12px;color:var(--text-dim)">Até:</label>
-            <input type="date" id="log-ate" class="field-input" style="flex:1;min-width:120px;padding:5px 8px;font-size:12px" onchange="_carregarLogAcessos()">
-        </div>
-        <div class="modal-body" id="log-acessos-corpo" style="max-height:55vh;overflow-y:auto">
-        </div>
-    </div>
-</div>
+/* ══════════════════════════════════════
+   LOGIN
+══════════════════════════════════════ */
+#screen-login {
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+}
 
-<script>
-</script>
-</body>
-</html>
+.login-bg { position: absolute; inset: 0; pointer-events: none; }
+
+.login-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.18;
+}
+.orb1 { width: 400px; height: 400px; background: #3b82f6; top: -100px; left: -100px; }
+.orb2 { width: 300px; height: 300px; background: #8b5cf6; bottom: -80px; right: -80px; }
+.orb3 { width: 200px; height: 200px; background: #06b6d4; top: 40%; left: 60%; }
+
+.login-card {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    padding: 40px 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    margin: 20px;
+    animation: fadeUp 0.5s ease;
+}
+
+@keyframes fadeUp {
+    from { opacity:0; transform: translateY(24px); }
+    to   { opacity:1; transform: translateY(0); }
+}
+
+.login-logo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 36px;
+}
+
+.logo-mark {
+    width: 52px; height: 52px;
+    background: var(--accent);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    color: white;
+    box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.logo-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 24px;
+    color: var(--text);
+    line-height: 1;
+}
+
+.logo-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 3px;
+}
+
+.login-form { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
+
+.login-hint { text-align: center; }
+.login-hint p { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+
+.hint-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+.chip {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: var(--trans);
+    background: transparent;
+}
+.chip-admin { border-color: var(--admin-clr); color: var(--admin-clr); }
+.chip-admin:hover { background: rgba(244,63,94,0.12); }
+.chip-colab { border-color: var(--colab-clr); color: var(--colab-clr); }
+.chip-colab:hover { background: rgba(16,185,129,0.12); }
+
+/* ══════════════════════════════════════
+   FORM FIELDS
+══════════════════════════════════════ */
+.field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+
+.field-input, .field-textarea, .field-select {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    transition: border-color var(--trans), box-shadow var(--trans);
+    outline: none;
+    appearance: none;
+}
+
+.field-input:focus, .field-textarea:focus, .field-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.field-textarea { resize: vertical; min-height: 80px; }
+.field-select { cursor: pointer; }
+.field-select option { background: var(--surface2); }
+
+.error-msg {
+    font-size: 13px;
+    color: var(--red);
+    padding: 8px 12px;
+    background: rgba(239,68,68,0.1);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(239,68,68,0.2);
+}
+
+/* ══════════════════════════════════════
+   BOTÕES
+══════════════════════════════════════ */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--trans), transform var(--trans), box-shadow var(--trans);
+    white-space: nowrap;
+}
+.btn-primary:hover {
+    background: var(--accent-h);
+    box-shadow: 0 4px 16px var(--accent-glow);
+    transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary.full { width: 100%; justify-content: center; }
+
+.btn-ghost {
+    padding: 12px 20px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: var(--trans);
+}
+.btn-ghost:hover { background: var(--surface2); color: var(--text); }
+
+.btn-danger {
+    padding: 8px 14px;
+    background: transparent;
+    color: var(--red);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: var(--trans);
+}
+.btn-danger:hover { background: rgba(239,68,68,0.1); border-color: var(--red); }
+
+.btn-icon {
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--trans);
+}
+.btn-icon:hover { background: var(--surface2); color: var(--text); }
+
+/* ══════════════════════════════════════
+   APP LAYOUT
+══════════════════════════════════════ */
+#screen-app {
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 60px;
+    background: rgba(11,15,26,0.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+}
+
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-right { display: flex; align-items: center; gap: 12px; position: relative; }
+
+.menu-btn {
+    background: none; border: none;
+    display: flex; flex-direction: column; gap: 5px;
+    cursor: pointer; padding: 4px;
+}
+.menu-btn span {
+    display: block; width: 22px; height: 2px;
+    background: var(--text-muted);
+    border-radius: 2px;
+    transition: var(--trans);
+}
+.menu-btn:hover span { background: var(--text); }
+
+.header-brand { display: flex; align-items: center; gap: 8px; }
+
+.header-logo {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 12px; color: white;
+}
+
+.header-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 16px;
+}
+
+.perfil-badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.perfil-badge.admin  { background: rgba(244,63,94,0.15);  color: var(--admin-clr); border: 1px solid rgba(244,63,94,0.3); }
+.perfil-badge.colab  { background: rgba(16,185,129,0.12); color: var(--colab-clr); border: 1px solid rgba(16,185,129,0.25); }
+.perfil-badge.master { background: rgba(139,92,246,0.18); color: #a78bfa;           border: 1px solid rgba(139,92,246,0.4); }
+.comment-author.master { color: #a78bfa; }
+
+.avatar-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 13px;
+    cursor: pointer;
+    transition: border-color var(--trans);
+    display: flex; align-items: center; justify-content: center;
+}
+.avatar-btn:hover { border-color: var(--accent); }
+
+.user-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    width: 200px;
+    z-index: 200;
+    animation: fadeDown 0.15s ease;
+}
+
+@keyframes fadeDown {
+    from { opacity:0; transform: translateY(-8px); }
+    to   { opacity:1; transform: translateY(0); }
+}
+
+.user-menu-info { padding: 14px 16px; }
+.menu-nome { font-weight: 600; font-size: 14px; }
+.menu-funcao { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.menu-divider { border: none; border-top: 1px solid var(--border); }
+.menu-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 12px 16px;
+    background: none; border: none;
+    color: var(--text-muted); font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer; text-align: left;
+    transition: var(--trans);
+}
+.menu-item:hover { background: var(--surface2); color: var(--text); }
+.menu-logout { color: var(--red); }
+.menu-logout:hover { background: rgba(239,68,68,0.08); }
+
+/* ── SIDEBAR ── */
+.sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 150;
+    backdrop-filter: blur(4px);
+}
+.sidebar-overlay.active { display: block; }
+
+.sidebar {
+    position: fixed;
+    left: -280px;
+    top: 0; bottom: 0;
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    z-index: 160;
+    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; flex-direction: column;
+    padding-bottom: 20px;
+}
+.sidebar.open { left: 0; }
+
+.sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.sidebar-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; }
+.close-sidebar {
+    background: none; border: none;
+    color: var(--text-muted); font-size: 18px;
+    cursor: pointer; padding: 4px;
+    transition: color var(--trans);
+}
+.close-sidebar:hover { color: var(--text); }
+
+.sidebar-nav { list-style: none; padding: 12px 12px 0; flex: 1; }
+
+.nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    transition: var(--trans);
+    text-decoration: none;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: rgba(59,130,246,0.12); color: var(--accent); }
+
+.sidebar-install { padding: 0 12px; margin-top: auto; }
+.btn-install {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 12px 14px;
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: var(--trans);
+}
+.btn-install:hover { background: rgba(59,130,246,0.15); }
+
+/* ── MAIN CONTENT ── */
+.app-main {
+    flex: 1;
+    padding: 24px 20px;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.page { display: none; }
+.page.active { display: block; animation: fadeUp 0.3s ease; }
+
+.page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+    gap: 16px;
+}
+.page-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; }
+.page-sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+/* ── FILTERS ── */
+.filters-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+
+.filter-chip {
+    padding: 6px 16px;
+    border-radius: 20px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: var(--trans);
+}
+.filter-chip:hover { border-color: var(--border2); color: var(--text); }
+.filter-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* ── TASK GRID ── */
+.tasks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.task-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: transform var(--trans), border-color var(--trans), box-shadow var(--trans);
+    position: relative;
+    overflow: hidden;
+}
+.task-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--text-dim);
+    transition: background var(--trans);
+}
+.task-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.task-card:hover::before { background: var(--accent); }
+
+.task-card.status-nao::before { background: var(--text-dim); }
+.task-card.status-andamento::before { background: var(--yellow); }
+.task-card.status-finalizado::before { background: var(--green); }
+
+.task-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+}
+.task-code {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px; font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+}
+.task-date { font-size: 11px; color: var(--text-dim); }
+
+.task-desc {
+    font-size: 15px; font-weight: 500;
+    line-height: 1.5;
+    color: var(--text);
+    margin-bottom: 16px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.task-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+}
+
+.task-colab {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-muted);
+}
+.colab-dot {
+    width: 24px; height: 24px;
+    background: var(--surface2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+    border: 1px solid var(--border);
+}
+
+.task-status-select {
+    padding: 5px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    transition: var(--trans);
+}
+.task-status-select:focus { border-color: var(--accent); }
+
+.task-actions {
+    display: flex; gap: 6px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.dblclick-hint {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-dim);
+    margin-top: 8px;
+}
+
+/* ── STATUS BADGE ── */
+.status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+}
+.status-badge.nao { background: rgba(107,127,168,0.12); color: var(--text-muted); }
+.status-badge.andamento { background: rgba(245,158,11,0.12); color: var(--yellow); }
+.status-badge.finalizado { background: rgba(16,185,129,0.12); color: var(--green); }
+
+/* ── EMPTY STATE ── */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+
+/* ── USUARIOS ── */
+.usuarios-list { display: flex; flex-direction: column; gap: 10px; }
+
+.usuario-card {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    transition: var(--trans);
+    gap: 12px;
+}
+.usuario-card:hover { border-color: var(--border2); }
+
+.usuario-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+.usuario-info > div { min-width: 0; }
+.usuario-nome  { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usuario-email { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usuario-funcao { font-size: 12px; color: var(--text-dim); }
+
+.usuario-acoes {
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+    .usuario-card {
+        flex-wrap: wrap;
+        padding: 14px 16px;
+        gap: 10px;
+    }
+    .usuario-info { flex: 1 1 100%; }
+    .usuario-acoes {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        gap: 6px;
+    }
+    .usuario-acoes .perfil-badge { display: none; } /* já vê no card */
+}
+
+.usuario-avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════
+   MODAIS
+══════════════════════════════════════ */
+.modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+}
+.modal-overlay.active {
+    display: flex;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+.modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: var(--shadow);
+    animation: slideUp 0.25s ease;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-large { max-width: 560px; }
+
+@keyframes slideUp {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+}
+
+.modal-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 24px 24px 0;
+    gap: 16px;
+}
+.modal-header h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; }
+.modal-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+
+.modal-close {
+    background: none; border: none;
+    color: var(--text-muted); font-size: 20px;
+    cursor: pointer; padding: 2px;
+    transition: color var(--trans);
+    flex-shrink: 0;
+    margin-top: -2px;
+}
+.modal-close:hover { color: var(--text); }
+
+.modal-body {
+    padding: 20px 24px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+}
+
+.modal-footer {
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding: 0 24px 24px;
+}
+
+/* ── COMMENTS ── */
+.comments-area {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    min-height: 120px;
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.comments-empty { font-size: 13px; color: var(--text-dim); text-align: center; margin: auto; }
+
+.comment-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    animation: fadeUp 0.2s ease;
+}
+.comment-text { font-size: 14px; line-height: 1.5; margin-bottom: 6px; }
+.comment-meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-dim);
+}
+.comment-author {
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.comment-author.admin { color: var(--admin-clr); }
+.comment-author.colab { color: var(--colab-clr); }
+
+.comment-input-area { display: flex; flex-direction: column; gap: 10px; }
+
+/* ══════════════════════════════════════
+   TOAST
+══════════════════════════════════════ */
+.toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    font-size: 14px;
+    box-shadow: var(--shadow);
+    z-index: 500;
+    animation: toastIn 0.25s ease;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 8px;
+}
+
+@keyframes toastIn {
+    from { opacity:0; transform: translateX(-50%) translateY(12px); }
+    to   { opacity:1; transform: translateX(-50%) translateY(0); }
+}
+
+.toast.success { border-color: rgba(16,185,129,0.4); color: var(--green); }
+.toast.error   { border-color: rgba(239,68,68,0.4); color: var(--red); }
+
+/* ── CAMPO SENHA com botão olho ── */
+.input-password-wrap {
+    position: relative;
+    width: 100%;
+}
+.input-password-wrap .field-input {
+    padding-right: 44px;
+}
+.btn-toggle-pw {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+    display: flex; align-items: center;
+    transition: color var(--trans);
+}
+.btn-toggle-pw:hover { color: var(--text-muted); }
+
+/* ── Badge troca pendente ── */
+.badge-senha {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: rgba(245,158,11,0.12);
+    color: var(--yellow);
+    border: 1px solid rgba(245,158,11,0.25);
+    white-space: nowrap;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+/* ══════════════════════════════════════
+   RESPONSÁVEIS — AVATARES NO CARD
+══════════════════════════════════════ */
+.task-responsaveis {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.resp-group { display: flex; align-items: center; }
+
+.resp-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 10px; font-weight: 700;
+    color: var(--text-muted);
+    margin-left: -6px;
+    transition: var(--trans);
+}
+.resp-avatar:first-child { margin-left: 0; }
+.resp-avatar:hover { z-index: 2; transform: scale(1.1); }
+
+/* ── Wrap para posicionar o ponto online ── */
+.resp-avatar-wrap {
+    position: relative;
+    display: inline-flex;
+    margin-left: -6px;
+    flex-shrink: 0;
+}
+.resp-avatar-wrap:first-child { margin-left: 0; }
+.resp-avatar-wrap .resp-avatar { margin-left: 0; }
+
+/* ── Ponto online ── */
+.online-dot {
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid var(--bg);
+    transition: background 0.3s ease;
+    z-index: 3;
+}
+.online-dot-active {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34,197,94,.25);
+    animation: pulse-online 2s infinite;
+}
+@keyframes pulse-online {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(34,197,94,.25); }
+    50%       { box-shadow: 0 0 0 5px rgba(34,197,94,.08); }
+}
+
+/* Dot maior nos cards de usuário */
+.usuario-avatar ~ .online-dot,
+.resp-avatar-wrap:has(.usuario-avatar) .online-dot {
+    width: 12px; height: 12px;
+    bottom: 1px; right: 1px;
+}
+
+.resp-extra { background: var(--border2); color: var(--text-dim); font-size: 9px; }
+
+.sem-responsavel { font-size: 12px; color: var(--text-dim); font-style: italic; }
+
+.btn-edit-resp {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px dashed var(--border2);
+    color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: var(--trans);
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+.btn-edit-resp:hover { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+/* ── SELETOR DE RESPONSÁVEIS (modal) ── */
+.resp-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.resp-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--trans);
+}
+.resp-checkbox input[type=checkbox] { display: none; }
+.resp-checkbox:hover { border-color: var(--border2); background: var(--surface2); }
+.resp-checkbox.checked { border-color: var(--accent); background: rgba(59,130,246,0.06); }
+
+.resp-check-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+    transition: var(--trans);
+}
+.resp-checkbox.checked .resp-check-avatar { background: var(--accent); color: white; border-color: var(--accent); }
+
+.resp-check-info { flex: 1; }
+.resp-check-nome   { font-size: 14px; font-weight: 500; display: block; }
+.resp-check-funcao { font-size: 12px; color: var(--text-muted); }
+
+.resp-check-mark {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white; font-size: 11px;
+    display: none;
+    align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.resp-checkbox.checked .resp-check-mark { display: flex; }
+
+/* Admin colaborador — cor roxa */
+.resp-check-avatar-admin {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border-color: rgba(124,58,237,0.3);
+}
+.resp-checkbox-admin.checked {
+    border-color: #7c3aed;
+    background: rgba(124,58,237,0.08);
+}
+.resp-checkbox-admin.checked .resp-check-avatar-admin {
+    background: #7c3aed;
+    color: white;
+    border-color: #7c3aed;
+}
+.resp-checkbox-admin.checked .resp-check-mark {
+    background: #7c3aed;
+}
+.resp-checkbox-admin:hover {
+    border-color: rgba(124,58,237,0.5);
+}
+
+/* ══════════════════════════════════════
+   HISTÓRICO NO MODAL DE COMENTÁRIOS
+══════════════════════════════════════ */
+.historico-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(59,130,246,0.04);
+    border: 1px solid rgba(59,130,246,0.1);
+    border-radius: var(--radius-sm);
+    animation: fadeUp 0.2s ease;
+}
+.historico-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.historico-body { flex: 1; }
+.historico-texto { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 3px; }
+.comment-date { font-size: 11px; color: var(--text-dim); }
+
+/* ══════════════════════════════════════
+   SCROLLBAR
+══════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ══════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════ */
+@media (max-width: 640px) {
+    .tasks-grid { grid-template-columns: 1fr; }
+    .page-header { flex-direction: column; align-items: flex-start; }
+    .filters-bar { gap: 6px; }
+    .filter-chip { font-size: 12px; padding: 5px 12px; }
+    .modal-box { max-height: 95vh; }
+    .app-main { padding: 12px 10px; overflow-x: hidden; }
+    .perfil-badge { display: none; }
+}
+
+/* ══════════════════════════════════════
+   BUSCA
+══════════════════════════════════════ */
+.search-filter-bar {
+    margin-bottom: 12px;
+}
+
+.search-wrap {
+    position: relative;
+    max-width: 420px;
+}
+
+.search-wrap svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    pointer-events: none;
+}
+
+.search-input {
+    width: 100%;
+    padding: 9px 14px 9px 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--trans), box-shadow var(--trans);
+}
+
+.search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-input::placeholder { color: var(--text-dim); }
+
+/* ══════════════════════════════════════
+   TABELA DE TAREFAS (desktop)
+══════════════════════════════════════ */
+.tasks-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.tasks-table thead tr {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+}
+
+.tasks-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.task-row {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    transition: background var(--trans);
+}
+
+.task-row:last-child { border-bottom: none; }
+.task-row:hover { background: var(--surface2); }
+
+.tasks-table td {
+    padding: 12px 16px;
+    vertical-align: middle;
+}
+
+.td-resp { width: 140px; }
+.td-desc { max-width: 320px; }
+.td-date { width: 130px; color: var(--text-muted); font-size: 13px; }
+.td-prio { width: 100px; }
+.td-status { width: 170px; }
+.td-actions { width: 210px; min-width: 210px; }
+
+.table-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.4;
+    margin-right: 6px;
+}
+
+.table-resp-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-family: 'Syne', sans-serif;
+    font-size: 10px; font-weight: 700;
+    color: var(--text-muted);
+    margin-right: 2px;
+}
+
+/* ─── COLUNA DE AÇÕES REDESENHADA ─── */
+.td-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: nowrap;
+    padding: 0 6px;
+    overflow: visible;
+}
+
+/* Botão de ação base */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    background: var(--surface2);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    position: relative;
+    flex-shrink: 0;
+    font-size: 15px;
+    line-height: 1;
+}
+.action-btn:hover { transform: translateY(-1px); }
+
+/* Checklist — verde */
+.action-btn.action-checklist {
+    color: #22c55e;
+    border-color: rgba(34,197,94,0.25);
+    background: rgba(34,197,94,0.08);
+}
+.action-btn.action-checklist:hover {
+    background: rgba(34,197,94,0.18);
+    border-color: #22c55e;
+    box-shadow: 0 2px 8px rgba(34,197,94,0.2);
+}
+
+/* Anexos — azul */
+.action-btn.action-anexos {
+    color: #60a5fa;
+    border-color: rgba(96,165,250,0.25);
+    background: rgba(96,165,250,0.08);
+}
+.action-btn.action-anexos:hover {
+    background: rgba(96,165,250,0.18);
+    border-color: #60a5fa;
+    box-shadow: 0 2px 8px rgba(96,165,250,0.2);
+}
+
+/* Responsáveis — roxo */
+.action-btn.action-resp {
+    color: #a78bfa;
+    border-color: rgba(167,139,250,0.25);
+    background: rgba(167,139,250,0.08);
+}
+.action-btn.action-resp:hover {
+    background: rgba(167,139,250,0.18);
+    border-color: #a78bfa;
+    box-shadow: 0 2px 8px rgba(167,139,250,0.2);
+}
+
+/* Excluir — vermelho */
+.action-btn.action-delete {
+    color: #f87171;
+    border-color: rgba(248,113,113,0.25);
+    background: rgba(248,113,113,0.08);
+}
+.action-btn.action-delete:hover {
+    background: rgba(248,113,113,0.18);
+    border-color: #f87171;
+    box-shadow: 0 2px 8px rgba(248,113,113,0.2);
+}
+
+/* Badge contador dentro do botão de ação */
+.action-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #3b82f6;
+    color: #fff;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--bg);
+    line-height: 1;
+}
+.action-badge.green  { background: #22c55e; }
+.action-badge.blue   { background: #3b82f6; }
+
+.btn-icon-danger {
+    color: var(--red) !important;
+    border-color: rgba(239,68,68,0.3) !important;
+}
+.btn-icon-danger:hover {
+    background: rgba(239,68,68,0.1) !important;
+    border-color: var(--red) !important;
+}
+
+/* Compact select na tabela */
+.task-status-select.compact {
+    font-size: 12px;
+    padding: 4px 8px;
+    width: 100%;
+}
+
+/* ══════════════════════════════════════
+   BADGES — PRIORIDADE
+══════════════════════════════════════ */
+.badge-prio {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.prio-baixa  { background: rgba(107,127,168,0.12); color: var(--text-muted); border: 1px solid rgba(107,127,168,0.2); }
+.prio-media  { background: rgba(245,158,11,0.12);  color: var(--yellow);     border: 1px solid rgba(245,158,11,0.2); }
+.prio-alta   { background: rgba(239,68,68,0.12);   color: var(--red);        border: 1px solid rgba(239,68,68,0.2); }
+
+/* ══════════════════════════════════════
+   BADGE — TAREFA PESSOAL
+══════════════════════════════════════ */
+.badge-pessoal {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(139,92,246,0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(139,92,246,0.2);
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
+/* ── Badges de perspectiva: Delegada / Comigo ── */
+.task-perspectiva {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.badge-perspectiva {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    text-transform: uppercase;
+}
+.badge-delegada {
+    background: rgba(34,197,94,0.12);
+    color: #22c55e;
+    border: 1px solid rgba(34,197,94,0.3);
+}
+.badge-comigo {
+    background: rgba(59,130,246,0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59,130,246,0.3);
+}
+
+/* ══════════════════════════════════════
+   NOVOS STATUS — cores na barra lateral do card
+══════════════════════════════════════ */
+.task-card.status-iniciado::before  { background: #3b82f6; }
+.task-card.status-pausado::before   { background: #f59e0b; }
+.task-card.status-aguardo::before   { background: #8b5cf6; }
+
+/* ══════════════════════════════════════
+   RESPONSIVE — esconde tabela no mobile
+══════════════════════════════════════ */
+@media (max-width: 768px) {
+    .tasks-table-wrap { display: none !important; }
+    .tasks-grid { display: grid !important; }
+    .search-wrap { max-width: 100%; }
+}
+
+/* ══════════════════════════════════════
+   BADGE ANEXO
+══════════════════════════════════════ */
+.badge-anexo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 2px;
+    vertical-align: middle;
+}
+
+/* ══════════════════════════════════════
+   MODAL ANEXOS — lista de arquivos
+══════════════════════════════════════ */
+.anexo-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+.anexo-icon { font-size: 22px; flex-shrink: 0; }
+.anexo-info { flex: 1; min-width: 0; }
+.anexo-nome {
+    display: block;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.anexo-nome:hover { text-decoration: underline; }
+.anexo-meta { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* ══════════════════════════════════════
+   RELATÓRIO DE PENDÊNCIAS
+══════════════════════════════════════ */
+.relatorio-header-info {
+    display: flex;
+    gap: 24px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.relatorio-pessoa {
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: visible;
+}
+.relatorio-pessoa-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    border-radius: 10px 10px 0 0;
+}
+.badge-relatorio-total {
+    margin-left: auto;
+    background: rgba(239,68,68,0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 12px;
+    white-space: nowrap;
+}
+.relatorio-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+    display: table;
+}
+.relatorio-table th {
+    background: rgba(255,255,255,0.03);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 9px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.relatorio-table td {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-base);
+    vertical-align: middle;
+}
+.relatorio-table tbody tr:last-child td { border-bottom: none; }
+.relatorio-table tbody tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+.relatorio-table tbody tr:last-child td:last-child  { border-radius: 0 0 10px 0; }
+.relatorio-table tbody tr:hover td { background: rgba(255,255,255,0.03); }
+
+/* ── Cards mobile do relatório ───────── */
+.rel-card {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.rel-card:last-child { border-bottom: none; }
+.rel-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+.rel-card-code {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+}
+.rel-card-data {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+.rel-card-desc {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text);
+}
+.rel-card-bottom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Modal relatório mobile ──────────── */
+@media (max-width: 600px) {
+    #modal-relatorio .modal-box {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        border-radius: 18px 18px 0 0 !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        top: auto !important;
+        max-height: 93vh !important;
+        transform: none !important;
+    }
+    #modal-relatorio .modal-header {
+        padding: 14px 14px 10px !important;
+    }
+    #modal-relatorio .modal-body {
+        max-height: calc(93vh - 110px) !important;
+        padding: 0 !important;
+    }
+    .relatorio-header-info {
+        padding: 10px 16px 8px !important;
+        margin-bottom: 8px !important;
+        font-size: 12px !important;
+        gap: 12px !important;
+    }
+    .relatorio-pessoa-header {
+        padding: 10px 14px !important;
+    }
+    .relatorio-pessoa {
+        margin-bottom: 14px !important;
+    }
+    /* Esconde o texto dos botões Imprimir/Excel no mobile, mantém só ícone */
+    .rel-btn-label { display: none; }
+    .rel-btn-acao  { padding: 6px 8px !important; min-width: 32px; justify-content: center; }
+    /* Esconde label "Filtrar por pessoa:" */
+    .rel-filtro-label { display: none; }
+}
+
+@media print {
+    /* Esconde tudo exceto o relatório */
+    body > *:not(#modal-relatorio) { display: none !important; }
+
+    /* Reset completo do modal para impressão */
+    #modal-relatorio {
+        position: static !important;
+        display: block !important;
+        background: white !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        height: auto !important;
+        width: 100% !important;
+    }
+    #modal-relatorio .modal-box {
+        box-shadow: none !important;
+        border: none !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+    }
+    #modal-relatorio .modal-body {
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+    /* Esconde botões e filtros */
+    .modal-header button,
+    .modal-close,
+    #btn-relatorio,
+    .modal-footer,
+    #relatorio-filtro-usuario,
+    #modal-relatorio .modal-header div > button { display: none !important; }
+
+    /* Mantém o título */
+    .modal-header { border-bottom: 1px solid #ddd !important; padding-bottom: 8px !important; }
+
+    /* Cada pessoa em nova página se necessário */
+    .relatorio-pessoa {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        overflow: visible !important;
+    }
+
+    /* Tabela não corta no meio */
+    .relatorio-table { page-break-inside: auto; }
+    .relatorio-table tr { page-break-inside: avoid; break-inside: avoid; }
+
+    /* Cores e background para impressão */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: white !important; }
+}
+
+/* ══════════════════════════════════════
+   DASHBOARD
+══════════════════════════════════════ */
+.dash-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color var(--trans), transform var(--trans), box-shadow var(--trans);
+    user-select: none;
+}
+.dash-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(59,130,246,.15);
+}
+.dash-card-active {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px rgba(59,130,246,.3) !important;
+}
+.dash-card-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+.dash-card-num {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+}
+.dash-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+}
+.dash-panel-full { grid-column: 1 / -1; }
+.dash-panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.dash-barra-row, .dash-ranking-row {
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background var(--trans);
+    margin-bottom: 4px;
+}
+.dash-barra-row:hover, .dash-ranking-row:hover { background: var(--surface2); }
+.dash-barra-ativa { background: var(--surface2) !important; outline: 1px solid var(--accent); }
+.dash-recente-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background var(--trans);
+    border-bottom: 1px solid var(--border);
+    min-width: 0; /* critical: allows flex children to shrink */
+    overflow: hidden;
+}
+.dash-recente-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-recente-row:last-child { border-bottom: none; }
+.dash-recente-row:hover { background: var(--surface2); }
+.dash-filtro-tag {
+    font-size: 11px;
+    background: var(--accent);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity var(--trans);
+}
+.dash-filtro-tag:hover { opacity: .8; }
+.dash-periodo-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all var(--trans);
+}
+.dash-periodo-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dash-periodo-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+@media (max-width: 640px) {
+    /* ── Layout geral ── */
+    .dash-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+    .dash-panel-full { grid-column: 1 !important; }
+    .dash-panel { padding: 14px 12px !important; }
+    .dash-panel-title { font-size: 10px !important; margin-bottom: 10px !important; }
+
+    /* ── Filtros no topo ── */
+    #page-dashboard .page-header { gap: 8px; }
+    #page-dashboard > div:nth-child(2) {
+        flex-direction: column !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+    }
+    #page-dashboard > div:nth-child(2) > div:first-child { order: 2; }
+    #dash-filtro-usuario {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        font-size: 13px !important;
+    }
+    /* Botões de período em linha compacta */
+    #page-dashboard > div:nth-child(2) > div:nth-child(2) { order: 1; }
+    .dash-periodo-btn { padding: 5px 10px !important; font-size: 11px !important; flex: 1; text-align: center; }
+    #page-dashboard > div:nth-child(2) > div:nth-child(2) { width: 100%; }
+
+    /* ── Cards: 2 colunas ── */
+    #page-dashboard > div:nth-child(3) {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+    }
+    .dash-card { padding: 12px 8px !important; }
+    .dash-card-num { font-size: 24px !important; }
+    .dash-card-label { font-size: 10px !important; }
+
+    /* ── Barras de status: mais compactas ── */
+    .dash-barra-row { padding: 5px 4px !important; margin-bottom: 2px !important; }
+
+    /* ── Ranking: só avatar + nome + número (sem barra) ── */
+    .dash-ranking-row > div:last-child { display: none !important; }
+    .dash-ranking-row { padding: 6px 4px !important; margin-bottom: 0 !important; }
+    .dash-ranking-row > div:first-child { margin-bottom: 0 !important; }
+    .dash-ranking-row .resp-avatar { width: 20px !important; height: 20px !important; font-size: 8px !important; }
+
+    /* ── Lista de tarefas: esconde pessoa, status menor ── */
+    /* Lista de tarefas: só código + descrição no mobile */
+    .dash-recente-pessoa { display: none !important; }
+    .dash-recente-status { display: none !important; }
+    .dash-recente-row { padding: 8px 6px !important; gap: 8px !important; }
+    .dash-recente-row > span:last-child { min-width: 0 !important; }
+
+    /* ── Tags de filtro ── */
+    .dash-filtro-tag { font-size: 10px !important; padding: 2px 8px !important; }
+
+    /* ── Gráfico: scroll horizontal, altura menor ── */
+    #dash-grafico {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 4px !important;
+    }
+    #dash-grafico > div { min-width: max-content; }
+}
+
+/* ══════════════════════════════════════
+   CHECKLIST — mini barra no card
+══════════════════════════════════════ */
+.checklist-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0 4px;
+    cursor: pointer;
+}
+.checklist-mini-bar-wrap {
+    flex: 1;
+    height: 5px;
+    background: var(--surface2);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.checklist-mini-bar {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+.checklist-mini-label {
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* ══════════════════════════════════════
+   CHECKLIST — modal lista de itens
+══════════════════════════════════════ */
+.checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+.checklist-item:last-child { border-bottom: none; }
+.checklist-item.concluido .ci-texto {
+    text-decoration: line-through;
+    color: var(--text-dim);
+}
+
+.ci-check-wrap { cursor: pointer; padding-top: 2px; flex-shrink: 0; }
+.ci-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+.ci-checkbox.checked {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #fff;
+}
+
+.ci-body { flex: 1; min-width: 0; }
+.ci-texto { font-size: 14px; color: var(--text-base); line-height: 1.4; display: block; }
+.ci-obs {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 4px 0 0;
+    background: var(--surface2);
+    border-left: 3px solid #22c55e;
+    padding: 4px 8px;
+    border-radius: 0 4px 4px 0;
+}
+.ci-meta {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 3px;
+}
+
+.ci-del {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.checklist-item:hover .ci-del { opacity: 1; }
+
+/* Comentar — amarelo */
+.action-btn.action-comentar {
+    color: #fbbf24;
+    border-color: rgba(251,191,36,0.25);
+    background: rgba(251,191,36,0.08);
+}
+.action-btn.action-comentar:hover {
+    background: rgba(251,191,36,0.18);
+    border-color: #fbbf24;
+    box-shadow: 0 2px 8px rgba(251,191,36,0.2);
+}
+
+/* Avatar roxo para admins colaboradores na coluna de responsável */
+.resp-avatar-admin {
+    background: rgba(124,58,237,0.2) !important;
+    color: #a78bfa !important;
+    border: 1.5px solid rgba(124,58,237,0.4) !important;
+}
+.table-resp-chip-admin {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(124,58,237,0.3);
+}
+/* ══════════════════════════════════════
+   CHANGELOG
+══════════════════════════════════════ */
+.changelog-list {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    max-width: 720px;
+}
+
+.changelog-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.changelog-dia {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.changelog-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    transition: border-color var(--trans);
+    position: relative;
+}
+.changelog-entry:hover { border-color: var(--border2); }
+
+.changelog-entry-left {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
+    background: var(--surface2);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+}
+
+.changelog-entry-body { flex: 1; min-width: 0; }
+
+.changelog-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.changelog-cat-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+.cat-feature    { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+.cat-fix        { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+.cat-improvement{ background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+.cat-removed    { background: rgba(107,114,128,0.12);color: #9ca3af; border: 1px solid rgba(107,114,128,0.2); }
+
+.changelog-hora {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+}
+
+.changelog-titulo {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 4px;
+}
+
+.changelog-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-top: 4px;
+}
+
+.changelog-del {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: var(--trans);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+}
+.changelog-entry:hover .changelog-del { opacity: 1; }
+.changelog-del:hover { color: var(--red); background: rgba(239,68,68,0.1); }
+
+/* ── Seletor de categoria no modal ── */
+.changelog-cat-select {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cat-option { cursor: pointer; }
+.cat-option input[type=radio] { display: none; }
+
+.cat-pill {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 2px solid transparent;
+    transition: var(--trans);
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.cat-option input:checked + .cat-pill {
+    opacity: 1;
+    border-color: currentColor;
+}
+
+.cat-pill.cat-feature     { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.cat-pill.cat-fix         { background: rgba(239,68,68,0.12);  color: #f87171; }
+.cat-pill.cat-improvement { background: rgba(245,158,11,0.12); color: #fbbf24; }
+.cat-pill.cat-removed     { background: rgba(107,114,128,0.12);color: #9ca3af; }
+
+.changelog-emoji { font-size: 20px; line-height: 1; }
+/* ══════════════════════════════════════
+   TICKETS — FEEDBACK
+══════════════════════════════════════ */
+
+/* Botão flutuante */
+#btn-feedback {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 200;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(59,130,246,.45);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+#btn-feedback:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 28px rgba(59,130,246,.6);
+}
+
+/* Botões de tipo no modal de feedback */
+.ticket-tipo-btn {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--trans);
+    text-align: center;
+}
+.ticket-tipo-btn:hover { border-color: var(--accent); color: var(--text-base); }
+.ticket-tipo-btn.active {
+    border-color: var(--accent);
+    background: rgba(59,130,246,.12);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* Cards de ticket na página admin */
+.ticket-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: var(--trans);
+}
+.ticket-card:hover { border-color: var(--accent); background: var(--surface2); }
+
+.ticket-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.ticket-tipo-badge {
+    font-size: 13px;
+    font-weight: 600;
+}
+.ticket-status-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid;
+}
+.ticket-status-aberto     { color: #ef4444; border-color: rgba(239,68,68,.3);   background: rgba(239,68,68,.08); }
+.ticket-status-em_analise { color: #f59e0b; border-color: rgba(245,158,11,.3);  background: rgba(245,158,11,.08); }
+.ticket-status-resolvido  { color: #22c55e; border-color: rgba(34,197,94,.3);   background: rgba(34,197,94,.08); }
+
+.ticket-desc {
+    font-size: 14px;
+    color: var(--text-base);
+    margin: 0 0 10px;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.ticket-card-footer {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+.ticket-resposta {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-left: 3px solid var(--accent);
+}
