@@ -173,20 +173,29 @@
                 </button>
             </div>
 
-            <div class="search-filter-bar">
-                <div class="search-wrap">
-                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                    <input type="text" id="busca-tarefas" class="search-input" placeholder="Buscar por descrição, responsável ou #número..." oninput="buscarTarefas(this.value)">
+            <div class="tasks-filter-area">
+                <!-- Linha 1: Busca + Responsável -->
+                <div class="tasks-filter-top">
+                    <div class="search-wrap" style="flex:1;max-width:380px">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        <input type="text" id="busca-tarefas" class="search-input" placeholder="Buscar descrição, responsável ou #número..." oninput="buscarTarefas(this.value)">
+                    </div>
+                    <div id="resp-filter-chips" class="resp-filter-bar"></div>
+                    <button id="btn-limpar-filtros" class="btn-ghost btn-sm" onclick="limparTodosFiltros()" style="display:none;white-space:nowrap;flex-shrink:0">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        Limpar
+                    </button>
                 </div>
-            </div>
-            <div class="filters-bar">
-                <button class="filter-chip active" data-status="todos" onclick="filtrarStatus('todos', this)">Todas</button>
-                <button class="filter-chip" data-status="Não iniciado" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
-                <button class="filter-chip" data-status="Iniciado" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
-                <button class="filter-chip" data-status="Em andamento" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
-                <button class="filter-chip" data-status="Pausado" onclick="filtrarStatus('Pausado', this)">Pausado</button>
-                <button class="filter-chip" data-status="Aguardo retorno" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
-                <button class="filter-chip" data-status="Finalizado" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
+                <!-- Linha 2: Status -->
+                <div class="filters-bar">
+                    <button class="filter-chip active" data-status="todos" onclick="filtrarStatus('todos', this)">Todas</button>
+                    <button class="filter-chip" data-status="Não iniciado" onclick="filtrarStatus('Não iniciado', this)">Não iniciado</button>
+                    <button class="filter-chip" data-status="Iniciado" onclick="filtrarStatus('Iniciado', this)">Iniciado</button>
+                    <button class="filter-chip" data-status="Em andamento" onclick="filtrarStatus('Em andamento', this)">Em andamento</button>
+                    <button class="filter-chip" data-status="Pausado" onclick="filtrarStatus('Pausado', this)">Pausado</button>
+                    <button class="filter-chip" data-status="Aguardo retorno" onclick="filtrarStatus('Aguardo retorno', this)">Aguardo retorno</button>
+                    <button class="filter-chip" data-status="Finalizado" onclick="filtrarStatus('Finalizado', this)">Finalizado</button>
+                </div>
             </div>
 
             <div id="tasks-grid" class="tasks-grid"></div>

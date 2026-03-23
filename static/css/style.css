@@ -1108,6 +1108,13 @@ body {
     .modal-box { max-height: 95vh; }
     .app-main { padding: 12px 10px; overflow-x: hidden; }
     .perfil-badge { display: none; }
+
+    /* Filtros mobile */
+    .tasks-filter-top { gap: 8px; }
+    .tasks-filter-top .search-wrap { max-width: 100% !important; width: 100%; }
+    .resp-filter-bar { order: 3; width: 100%; }
+    .resp-chip-nome { max-width: 60px; }
+    #btn-limpar-filtros { order: 2; }
 }
 
 /* ══════════════════════════════════════
@@ -1116,6 +1123,62 @@ body {
 .search-filter-bar {
     margin-bottom: 12px;
 }
+
+/* Nova área de filtros reorganizada */
+.tasks-filter-area { margin-bottom: 4px; }
+
+.tasks-filter-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+/* Barra de chips de responsável */
+.resp-filter-bar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.resp-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 5px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: var(--trans);
+    white-space: nowrap;
+}
+.resp-chip:hover { border-color: var(--accent); color: var(--text-base); }
+.resp-chip.active {
+    border-color: var(--accent);
+    background: rgba(59,130,246,.12);
+    color: var(--accent);
+    font-weight: 600;
+}
+.resp-chip-av {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--surface2);
+    font-size: 8px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    flex-shrink: 0;
+}
+.resp-chip.active .resp-chip-av {
+    background: var(--accent);
+    color: #fff;
+}
+.resp-chip-nome { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
 
 .search-wrap {
     position: relative;

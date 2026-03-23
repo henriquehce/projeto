@@ -6,6 +6,7 @@ let usuarioLogado  = null;
 let todasTarefas   = [];
 let filtrosAtivos   = new Set(); // vazio = todas
 let buscaAtual     = '';
+let filtroRespId   = null;
 let tarefaAberta   = null;
 let deferredPrompt = null;
 let responsaveisDisponiveis = [];
@@ -323,9 +324,60 @@ async function carregarTarefas() {
             document.getElementById('tarefas-sub').textContent = admin
                 ? `${total} tarefa${total !== 1 ? 's' : ''} no total`
                 : `${total} tarefa${total !== 1 ? 's' : ''} atribuída${total !== 1 ? 's' : ''} a você`;
+            construirRespFilterChips();
             renderizarTarefas();
         }
     } catch { toast('Erro ao carregar tarefas', 'error'); }
+}
+
+function construirRespFilterChips() {
+    // Só admins veem esse filtro (colaborativo só vê as suas)
+    if (!isAdmin()) return;
+    const container = document.getElementById('resp-filter-chips');
+    if (!container) return;
+
+    // Coleta todas as pessoas únicas com tarefas
+    const pessoas = new Map();
+    todasTarefas.forEach(t => {
+        (t.responsaveis || []).forEach(r => pessoas.set(r.id, r.nome));
+        (t.admins_colabs || []).forEach(r => pessoas.set(r.id, r.nome));
+        if (t.criado_por && t.criado_por_nome) pessoas.set(t.criado_por, t.criado_por_nome);
+    });
+
+    if (pessoas.size <= 1) { container.innerHTML = ''; return; }
+
+    container.innerHTML = [...pessoas.entries()].map(([id, nome]) => `
+        <button class="resp-chip ${filtroRespId === id ? 'active' : ''}"
+                onclick="filtrarResp(${id})" title="${escapar(nome)}">
+            <span class="resp-chip-av">${iniciais(nome)}</span>
+            <span class="resp-chip-nome">${escapar(nome.split(' ')[0])}</span>
+        </button>
+    `).join('');
+}
+
+function filtrarResp(id) {
+    filtroRespId = filtroRespId === id ? null : id; // toggle
+    construirRespFilterChips();
+    atualizarBtnLimpar();
+    renderizarTarefas();
+}
+
+function atualizarBtnLimpar() {
+    const btn = document.getElementById('btn-limpar-filtros');
+    if (btn) btn.style.display = (filtroRespId !== null || filtrosAtivos.size > 0 || buscaAtual.trim()) ? 'flex' : 'none';
+}
+
+function limparTodosFiltros() {
+    filtroRespId = null;
+    filtrosAtivos.clear();
+    buscaAtual = '';
+    document.getElementById('busca-tarefas').value = '';
+    document.querySelectorAll('.filter-chip').forEach(c =>
+        c.classList.toggle('active', c.dataset.status === 'todos')
+    );
+    construirRespFilterChips();
+    atualizarBtnLimpar();
+    renderizarTarefas();
 }
 
 // ─────────────────────────────────────────
@@ -335,6 +387,13 @@ function getTarefasFiltradas() {
     let lista = filtrosAtivos.size === 0
         ? todasTarefas
         : todasTarefas.filter(t => filtrosAtivos.has(t.status));
+    if (filtroRespId !== null) {
+        lista = lista.filter(t =>
+            (t.responsaveis || []).some(r => r.id === filtroRespId) ||
+            (t.admins_colabs || []).some(r => r.id === filtroRespId) ||
+            t.criado_por === filtroRespId
+        );
+    }
     if (buscaAtual.trim()) {
         const q    = buscaAtual.trim().toLowerCase().replace(/^#/, ''); // aceita "#55" ou "55"
         const qNum = parseInt(q);
@@ -398,6 +457,7 @@ function filtrarStatus(status, btn) {
             c.classList.toggle('active', filtrosAtivos.has(s));
         }
     });
+    atualizarBtnLimpar();
     renderizarTarefas();
 }
 
