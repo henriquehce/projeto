@@ -411,28 +411,48 @@
 </div>
 
 <!-- MODAL FEEDBACK (todos os usuários) -->
-<div id="modal-feedback" class="modal-overlay" onclick="fecharModalSeFora(event,'modal-feedback')">
-    <div class="modal-box" style="max-width:480px">
-        <div class="modal-header">
-            <h3>💬 Enviar feedback</h3>
-            <button onclick="fecharModal('modal-feedback')" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-            <label class="field-label">Tipo</label>
-            <div style="display:flex;gap:8px;margin-bottom:16px">
-                <button class="ticket-tipo-btn active" data-tipo="erro" onclick="selecionarTipoTicket('erro')">🐛 Erro</button>
-                <button class="ticket-tipo-btn" data-tipo="sugestao" onclick="selecionarTipoTicket('sugestao')">💡 Sugestão</button>
-                <button class="ticket-tipo-btn" data-tipo="outro" onclick="selecionarTipoTicket('outro')">📋 Outro</button>
-            </div>
-            <label class="field-label">Descrição</label>
-            <textarea id="feedback-descricao" class="field-textarea" rows="4"
-                placeholder="Descreva o erro encontrado ou sua sugestão de melhoria..."></textarea>
-        </div>
-        <div class="modal-footer">
-            <button onclick="fecharModal('modal-feedback')" class="btn-ghost">Cancelar</button>
-            <button onclick="enviarFeedback()" class="btn-primary">Enviar</button>
-        </div>
+<div id="modal-feedback"
+    class="modal-overlay"
+    onclick="fecharModalSeFora(event,'modal-feedback')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Enviar Feedback</h3>
+      <button class="modal-close"
+        onclick="fecharModal('modal-feedback')">✕</button>
     </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px">
+        <button class="ticket-tipo-btn active"
+          data-tipo="erro"
+          onclick="selecionarTipoTicket('erro')">
+          🐛 Erro</button>
+        <button class="ticket-tipo-btn"
+          data-tipo="sugestao"
+          onclick="selecionarTipoTicket('sugestao')">
+          💡 Sugestão</button>
+        <button class="ticket-tipo-btn"
+          data-tipo="outro"
+          onclick="selecionarTipoTicket('outro')">
+          📋 Outro</button>
+      </div>
+      <div>
+        <label class="field-label">Descrição</label>
+        <textarea id="feedback-descricao"
+          class="field-textarea"
+          rows="4"
+          placeholder="Descreva o problema ou sugestão...">
+        </textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost"
+        onclick="fecharModal('modal-feedback')">
+        Cancelar</button>
+      <button class="btn-primary"
+        onclick="enviarFeedback()">
+        Enviar</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL TICKET DETALHE (Admin Master) -->
