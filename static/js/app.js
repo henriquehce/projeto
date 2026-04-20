@@ -852,7 +852,7 @@ async function abrirModalComentarios(codigo) {
     tarefaAberta = codigo;
     const tarefa = todasTarefas.find(t => t.codigo === codigo);
     document.getElementById('comentario-titulo').textContent = `Tarefa #${String(codigo).padStart(4,'0')}`;
-    document.getElementById('comentario-desc').textContent   = tarefa ? tarefa.descricao : '';
+    document.getElementById('comentario-desc').innerHTML = tarefa ? escaparComLinhas(tarefa.descricao) : '';
     document.getElementById('novo-comentario-texto').value   = '';
     await carregarComentarios(codigo);
     abrirModal('modal-comentarios');
@@ -1869,6 +1869,16 @@ function iniciais(nome) {
 function escapar(str) {
     if (!str) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escaparComLinhas(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/\n/g,'<br>');
 }
 
 function statusClass(s) {
