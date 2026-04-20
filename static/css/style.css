@@ -1101,20 +1101,31 @@ body {
    RESPONSIVE
 ══════════════════════════════════════ */
 @media (max-width: 640px) {
-    .tasks-grid { grid-template-columns: 1fr; }
-    .page-header { flex-direction: column; align-items: flex-start; }
-    .filters-bar { gap: 6px; }
-    .filter-chip { font-size: 12px; padding: 5px 12px; }
-    .modal-box { max-height: 95vh; }
-    .app-main { padding: 12px 10px; overflow-x: hidden; }
-    .perfil-badge { display: none; }
-
-    /* Filtros mobile */
-    .tasks-filter-top { gap: 8px; }
-    .tasks-filter-top .search-wrap { max-width: 100% !important; width: 100%; }
-    .resp-filter-bar { order: 3; width: 100%; }
-    .resp-chip-nome { max-width: 60px; }
-    #btn-limpar-filtros { order: 2; }
+    .tasks-filter-top {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .tasks-filter-top .search-wrap {
+        max-width: 100% !important;
+        width: 100%;
+        order: 1;
+    }
+    .resp-filter-bar {
+        order: 2;
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+    }
+    #btn-limpar-filtros {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+    .resp-chip-nome {
+        max-width: 70px;
+    }
 }
 
 /* ══════════════════════════════════════
