@@ -330,23 +330,23 @@ class ChangelogEntry(db.Model):
             'categoria':  self.categoria,
             'titulo':     self.titulo,
             'descricao':  self.descricao or '',
-            'criado_em':  self.criado_em.strftime('%d/%m/%Y %H:%M'),
+            'criado_em':  self.criado_em.strftime('%d/%m/%Y %H:%M') if self.criado_em else '',
             'autor_nome': self.autor.nome if self.autor else 'Sistema'
         }
 
 
 class Ticket(db.Model):
     __tablename__ = 'tickets'
-    id          = db.Column(db.Integer, primary_key=True)
-    tipo        = db.Column(db.String(20), nullable=False)    # erro | sugestao | outro
-    descricao   = db.Column(db.Text, nullable=False)
-    status      = db.Column(db.String(20), default='aberto')  # aberto | em_analise | resolvido
-    resposta    = db.Column(db.Text, nullable=True)
-    empresa     = db.Column(db.String(100), nullable=True)
-    criado_por  = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    criado_em   = db.Column(db.DateTime, default=agora_br)
-    resolvido_em= db.Column(db.DateTime, nullable=True)
-    autor       = db.relationship('Usuario', foreign_keys=[criado_por])
+    id           = db.Column(db.Integer, primary_key=True)
+    tipo         = db.Column(db.String(20), nullable=False)    # erro | sugestao | outro
+    descricao    = db.Column(db.Text, nullable=False)
+    status       = db.Column(db.String(20), default='aberto')  # aberto | em_analise | resolvido
+    resposta     = db.Column(db.Text, nullable=True)
+    empresa      = db.Column(db.String(100), nullable=True)
+    criado_por   = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    criado_em    = db.Column(db.DateTime, nullable=True)
+    resolvido_em = db.Column(db.DateTime, nullable=True)
+    autor        = db.relationship('Usuario', foreign_keys=[criado_por])
 
     def to_dict(self):
         return {
@@ -358,7 +358,7 @@ class Ticket(db.Model):
             'empresa':      self.empresa or '',
             'criado_por':   self.criado_por,
             'autor_nome':   self.autor.nome if self.autor else '?',
-            'criado_em':    self.criado_em.strftime('%d/%m/%Y %H:%M'),
+            'criado_em':    self.criado_em.strftime('%d/%m/%Y %H:%M') if self.criado_em else '',
             'resolvido_em': self.resolvido_em.strftime('%d/%m/%Y %H:%M') if self.resolvido_em else None,
         }
 
@@ -1283,7 +1283,6 @@ def atualizar_prioridade(codigo):
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-        return jsonify({'erro': 'Acesso negado'}), 403
     nova = request.json.get('prioridade')
     if nova not in PRIORIDADES_VALIDAS:
         return jsonify({'erro': 'Prioridade invalida'}), 400
@@ -1300,7 +1299,6 @@ def atualizar_responsaveis(codigo):
     if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
-        return jsonify({'erro': 'Acesso negado'}), 403
         return jsonify({'erro': 'Acesso negado'}), 403
     ids_antes = {u.id for u in tarefa.responsaveis}
     empresa   = admin.empresa
@@ -1335,7 +1333,6 @@ def atualizar_admins_colab(codigo):
     if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
-        return jsonify({'erro': 'Acesso negado'}), 403
         return jsonify({'erro': 'Acesso negado'}), 403
     empresa = admin.empresa
     ids_admins_antes = {u.id for u in tarefa.admins_colabs}
@@ -1863,7 +1860,7 @@ def excluir_changelog(entry_id):
 @app.route('/api/tickets', methods=['POST'])
 @login_required
 def criar_ticket():
-    u    = usuario_atual()
+    u     = usuario_atual()
     dados = request.json or {}
     tipo  = dados.get('tipo', '').strip()
     desc  = dados.get('descricao', '').strip()
@@ -1871,9 +1868,17 @@ def criar_ticket():
         return jsonify({'erro': 'Tipo inválido'}), 400
     if not desc:
         return jsonify({'erro': 'Descrição obrigatória'}), 400
-    t = Ticket(tipo=tipo, descricao=desc, empresa=u.empresa, criado_por=u.id)
+    t = Ticket(
+        tipo=tipo,
+        descricao=desc,
+        empresa=u.empresa,
+        criado_por=u.id,
+        criado_em=agora_br(),   # explícito — evita None quando default não é chamado pelo ORM
+        status='aberto'
+    )
     db.session.add(t)
-    safe_commit()
+    if not safe_commit():
+        return jsonify({'erro': 'Erro ao salvar ticket'}), 500
     return jsonify(t.to_dict()), 201
 
 
@@ -1896,7 +1901,7 @@ def atualizar_ticket(tid):
     ticket = db.session.get(Ticket, tid)
     if not ticket:
         return jsonify({'erro': 'Ticket não encontrado'}), 404
-    dados   = request.json or {}
+    dados = request.json or {}
     if 'status' in dados and dados['status'] in ('aberto', 'em_analise', 'resolvido'):
         ticket.status = dados['status']
         if dados['status'] == 'resolvido' and not ticket.resolvido_em:
