@@ -2163,3 +2163,25 @@ async function salvarTicket() {
         toast(e.erro || 'Erro', 'error');
     }
 }
+
+async function entrarDemo() {
+    const btn = document.querySelector('#screen-login .btn-ghost');
+    btn.textContent = 'Carregando demo...';
+    btn.disabled = true;
+
+    try {
+        const res = await api('/api/demo-login', 'POST');
+
+        if (res.ok) {
+            usuarioLogado = await res.json();
+            entrarNoApp();
+        } else {
+            mostrarErroLogin('Erro ao iniciar demo.');
+        }
+    } catch {
+        mostrarErroLogin('Erro de conexão (demo).');
+    } finally {
+        btn.textContent = '👁️ Ver demonstração';
+        btn.disabled = false;
+    }
+}

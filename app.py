@@ -539,7 +539,175 @@ def registrar_historico(id_tarefa, id_usuario, texto):
 def registrar_acesso(uid):
     db.session.add(LogAcesso(usuario_id=uid))
 
+# ─────────────────────────────────────────
+# DEMO MODE
+# ─────────────────────────────────────────
 
+def get_usuario_demo():
+    return Usuario.query.filter_by(email='demo@taskflow.com').first()
+
+
+def bloquear_se_demo():
+    """Retorna erro 403 se o usuário logado for o demo, ou None se puder continuar."""
+    if usuario_eh_demo():
+        return jsonify({'erro': 'Modo demonstração não permite alterações'}), 403
+    return None
+
+
+def usuario_eh_demo():
+    user_id = session.get('usuario_id')
+    if not user_id:
+        return False
+    user = db.session.get(Usuario, user_id)
+    return user is not None and user.email == 'demo@taskflow.com'
+
+
+def criar_usuario_demo():
+    user = get_usuario_demo()
+    if not user:
+        user = Usuario(
+            nome='Usuário Demo',
+            funcao='Gerente de Projetos',
+            email='demo@taskflow.com',
+            tipo_perfil='Administrador',
+            trocar_senha=False,
+            empresa='Demo Ltda',
+            setor='Tecnologia'
+        )
+        user.definir_senha('demo123')
+        db.session.add(user)
+        db.session.commit()
+    return user
+
+
+def criar_dados_demo(user_id):
+    """Cria tarefas, colaborativos, comentários e checklist de exemplo para o demo."""
+    if Tarefa.query.filter_by(criado_por=user_id).first():
+        return  # Já existe — não recria
+
+    # Colaborativos fictícios
+    colabs_data = [
+        {'nome': 'Ana Lima',    'funcao': 'Desenvolvedora', 'email': 'ana.demo@taskflow.com',    'setor': 'TI'},
+        {'nome': 'Carlos Melo', 'funcao': 'Designer',       'email': 'carlos.demo@taskflow.com', 'setor': 'Design'},
+        {'nome': 'Juliana Paz', 'funcao': 'Analista QA',    'email': 'juliana.demo@taskflow.com','setor': 'Qualidade'},
+    ]
+    colabs = []
+    for cd in colabs_data:
+        c = Usuario.query.filter_by(email=cd['email']).first()
+        if not c:
+            c = Usuario(
+                nome=cd['nome'], funcao=cd['funcao'], email=cd['email'],
+                tipo_perfil='Colaborativo', trocar_senha=False,
+                empresa='Demo Ltda', setor=cd['setor']
+            )
+            c.definir_senha('Demo@1234')
+            db.session.add(c)
+        colabs.append(c)
+    db.session.flush()
+
+    from datetime import date, timedelta
+    hoje = agora_br().date()
+
+    tarefas_spec = [
+        {
+            'descricao':  'Aprovar layout do sistema',
+            'status':     'Em andamento',
+            'prioridade': 'Alta',
+            'data_prazo': hoje + timedelta(days=2),
+            'resps':      [0],   # índices em colabs
+            'checklist':  ['Revisar protótipo no Figma', 'Validar paleta de cores', 'Confirmar tipografia'],
+            'comentarios': ['Protótipo enviado para revisão.', 'Aguardando aprovação final do cliente.'],
+        },
+        {
+            'descricao':  'Revisar relatórios financeiros',
+            'status':     'Não iniciado',
+            'prioridade': 'Nenhuma',
+            'data_prazo': hoje + timedelta(days=10),
+            'resps':      [2],
+            'checklist':  ['Consolidar planilhas Q1', 'Conferir conciliação bancária'],
+            'comentarios': ['Documentos recebidos do financeiro.'],
+        },
+        {
+            'descricao':  'Deploy da aplicação em produção',
+            'status':     'Finalizado',
+            'prioridade': 'Alta',
+            'data_prazo': hoje - timedelta(days=3),
+            'resps':      [0, 1],
+            'checklist':  ['Rodar testes de regressão', 'Fazer backup do banco', 'Executar deploy'],
+            'comentarios': ['Deploy realizado com sucesso!'],
+        },
+        {
+            'descricao':  'Organizar backlog do projeto',
+            'status':     'Pausado',
+            'prioridade': 'Nenhuma',
+            'data_prazo': hoje + timedelta(days=7),
+            'resps':      [1],
+            'checklist':  ['Priorizar épicos', 'Estimar story points'],
+            'comentarios': ['Aguardando reunião de refinamento.'],
+        },
+        {
+            'descricao':  'Implementar autenticação SSO',
+            'status':     'Iniciado',
+            'prioridade': 'Alta',
+            'data_prazo': hoje + timedelta(days=5),
+            'resps':      [0],
+            'checklist':  ['Estudar provider OAuth', 'Configurar callback', 'Testar fluxo de login'],
+            'comentarios': [],
+        },
+        {
+            'descricao':  'Criar documentação da API',
+            'status':     'Aguardo retorno',
+            'prioridade': 'Nenhuma',
+            'data_prazo': hoje + timedelta(days=14),
+            'resps':      [2],
+            'checklist':  ['Mapear endpoints', 'Escrever exemplos de requisição'],
+            'comentarios': ['Aguardando retorno do time de back-end.'],
+        },
+    ]
+
+    for spec in tarefas_spec:
+        t = Tarefa(
+            descricao=spec['descricao'],
+            status=spec['status'],
+            prioridade=spec['prioridade'],
+            criado_por=user_id,
+            empresa='Demo Ltda',
+            compartilhada=bool(spec['resps']),
+            data_prazo=spec.get('data_prazo'),
+        )
+        db.session.add(t)
+        db.session.flush()
+
+        for idx in spec['resps']:
+            if idx < len(colabs):
+                t.responsaveis.append(colabs[idx])
+
+        for ordem, texto_ck in enumerate(spec['checklist'], 1):
+            concluido = spec['status'] == 'Finalizado'
+            item = ChecklistItem(
+                id_tarefa=t.codigo, texto=texto_ck, ordem=ordem,
+                concluido=concluido,
+                concluido_por=user_id if concluido else None,
+                concluido_em=agora_br() if concluido else None,
+                criado_por=user_id
+            )
+            db.session.add(item)
+
+        for texto_cm in spec['comentarios']:
+            cm = Comentario(
+                id_tarefa=t.codigo, id_usuario=user_id,
+                texto=texto_cm, tipo='comentario'
+            )
+            db.session.add(cm)
+
+        hist = Comentario(
+            id_tarefa=t.codigo, id_usuario=user_id,
+            texto=f'Tarefa criada por Usuário Demo.', tipo='historico'
+        )
+        db.session.add(hist)
+
+    db.session.commit()
+    
 # ─────────────────────────────────────────
 # DECORADORES
 # ─────────────────────────────────────────
@@ -633,6 +801,9 @@ def ping():
 @app.route('/api/trocar-senha', methods=['POST'])
 @login_required
 def trocar_senha():
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     dados       = request.json
     senha_atual = dados.get('senha_atual', '')
     senha_nova  = dados.get('senha_nova', '')
@@ -656,6 +827,9 @@ def trocar_senha():
 @app.route('/api/trocar-email', methods=['POST'])
 @login_required
 def trocar_email():
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     dados      = request.json
     senha      = dados.get('senha', '').strip()
     email_novo = dados.get('email_novo', '').strip().lower()
@@ -759,6 +933,9 @@ def listar_admins():
 @app.route('/api/usuarios', methods=['POST'])
 @admin_required
 def criar_usuario():
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     dados = request.json
     for campo in ['nome', 'funcao', 'email', 'tipo_perfil', 'senha']:
         if not dados.get(campo):
@@ -792,6 +969,9 @@ def criar_usuario():
 @app.route('/api/usuarios/<int:uid>', methods=['PUT'])
 @master_required
 def editar_usuario(uid):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     admin   = usuario_atual()
     usuario = db.session.get(Usuario, uid)
     if not usuario:
@@ -820,6 +1000,9 @@ def editar_usuario(uid):
 @app.route('/api/usuarios/<int:uid>', methods=['DELETE'])
 @admin_required
 def excluir_usuario(uid):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     admin   = usuario_atual()
     usuario = db.session.get(Usuario, uid)
     if not usuario:
@@ -963,22 +1146,19 @@ def dashboard():
     # Lista de TODAS as pessoas com tarefas (responsáveis + criadores + admins_colabs) para o filtro
     pessoas_set = {}
     for t in todas_tarefas:
-        # Responsáveis colaborativos
         for r in t.responsaveis:
             if r.id not in pessoas_set:
                 pessoas_set[r.id] = r.nome
-        # Admins colaboradores adicionados à tarefa
         for a in t.admins_colabs:
             if a.id not in pessoas_set:
                 pessoas_set[a.id] = a.nome
-        # Criador da tarefa (admin/master com tarefas pessoais)
         if t.criado_por:
             criador = db.session.get(Usuario, t.criado_por)
             if criador and criador.id not in pessoas_set:
                 pessoas_set[criador.id] = criador.nome
     responsaveis_lista = sorted([{'id': k, 'nome': v} for k, v in pessoas_set.items()], key=lambda x: x['nome'])
 
-    # Por usuário (ranking de pendências) — inclui responsáveis, admins_colabs E criadores de tarefas pessoais
+    # Por usuário (ranking de pendências)
     por_usuario = {}
     for t in todas_tarefas:
         if t.status == 'Finalizado':
@@ -987,7 +1167,6 @@ def dashboard():
         ids_adm_colab = [a.id for a in t.admins_colabs]
 
         if ids_resp:
-            # Tarefa compartilhada com colaborativos — conta para cada responsável
             for r in t.responsaveis:
                 if filtro_uid_resp and r.id != filtro_uid_resp:
                     continue
@@ -997,7 +1176,6 @@ def dashboard():
                 if t.prioridade == 'Alta':
                     por_usuario[r.id]['alta'] += 1
         elif ids_adm_colab:
-            # Tarefa delegada a admins colaboradores
             for a in t.admins_colabs:
                 if filtro_uid_resp and a.id != filtro_uid_resp:
                     continue
@@ -1007,7 +1185,6 @@ def dashboard():
                 if t.prioridade == 'Alta':
                     por_usuario[a.id]['alta'] += 1
         elif t.criado_por:
-            # Tarefa pessoal — conta para o criador
             if filtro_uid_resp and t.criado_por != filtro_uid_resp:
                 continue
             criador = db.session.get(Usuario, t.criado_por)
@@ -1019,9 +1196,6 @@ def dashboard():
                     por_usuario[criador.id]['alta'] += 1
     ranking = sorted(por_usuario.values(), key=lambda x: x['total'], reverse=True)[:10]
 
-    # Lista de tarefas para exibição:
-    # — Sem filtro: 8 mais recentes
-    # — Com qualquer filtro: todas as tarefas filtradas (já via tem_pessoa + status)
     if filtro_uid_resp or filtro_status:
         base_lista = sorted(tarefas_filtradas, key=lambda t: t.codigo, reverse=True)
     else:
@@ -1110,6 +1284,9 @@ def listar_lixeira():
 @app.route('/api/tarefas', methods=['POST'])
 @admin_required
 def criar_tarefa():
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     dados = request.json
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descricao obrigatoria'}), 400
@@ -1159,13 +1336,15 @@ def criar_tarefa():
 @app.route('/api/tarefas/<int:codigo>', methods=['DELETE'])
 @admin_required
 def excluir_tarefa(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if admin.empresa and tarefa.empresa != admin.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    # Soft delete
     tarefa.deletado_em  = agora_br()
     tarefa.deletado_por = session['usuario_id']
     registrar_historico(codigo, session['usuario_id'], f'Tarefa movida para lixeira por {admin.nome}.')
@@ -1176,6 +1355,9 @@ def excluir_tarefa(codigo):
 @app.route('/api/tarefas/<int:codigo>/restaurar', methods=['POST'])
 @admin_required
 def restaurar_tarefa(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or not tarefa.deletado_em:
@@ -1191,6 +1373,9 @@ def restaurar_tarefa(codigo):
 @app.route('/api/tarefas/<int:codigo>/permanente', methods=['DELETE'])
 @admin_required
 def excluir_permanente(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa:
@@ -1205,16 +1390,17 @@ def excluir_permanente(codigo):
 @app.route('/api/tarefas/<int:codigo>/status', methods=['PATCH'])
 @login_required
 def atualizar_status(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado — empresa diferente'}), 403
-    # Colaborativo só altera status de tarefas onde é responsável
     if usuario.tipo_perfil == 'Colaborativo' and usuario.id not in [u.id for u in tarefa.responsaveis]:
         return jsonify({'erro': 'Acesso negado — você não é responsável desta tarefa'}), 403
-    # Admin e Admin Master podem alterar status de qualquer tarefa da empresa
     novo_status = request.json.get('status')
     if novo_status not in STATUSES_VALIDOS:
         return jsonify({'erro': 'Status invalido'}), 400
@@ -1231,7 +1417,6 @@ def atualizar_status(codigo):
     if anterior != novo_status:
         email_status_alterado(tarefa, anterior, novo_status, usuario.nome, usuario.id)
 
-    # Tarefas recorrentes: ao finalizar, cria próxima ocorrência
     nova_tarefa = None
     if novo_status == 'Finalizado' and tarefa.recorrente in ('semanal', 'mensal'):
         from datetime import date, timedelta
@@ -1239,7 +1424,6 @@ def atualizar_status(codigo):
             if tarefa.recorrente == 'semanal':
                 proximo_prazo = tarefa.data_prazo + timedelta(weeks=1)
             else:
-                # Avança um mês, mantendo o dia
                 m = tarefa.data_prazo.month + 1
                 y = tarefa.data_prazo.year + (m - 1) // 12
                 m = ((m - 1) % 12) + 1
@@ -1277,6 +1461,9 @@ def atualizar_status(codigo):
 @app.route('/api/tarefas/<int:codigo>/prioridade', methods=['PATCH'])
 @admin_required
 def atualizar_prioridade(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1294,6 +1481,9 @@ def atualizar_prioridade(codigo):
 @app.route('/api/tarefas/<int:codigo>/responsaveis', methods=['PUT'])
 @admin_required
 def atualizar_responsaveis(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1328,6 +1518,9 @@ def atualizar_responsaveis(codigo):
 @app.route('/api/tarefas/<int:codigo>/admins', methods=['PUT'])
 @admin_required
 def atualizar_admins_colab(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1370,18 +1563,19 @@ def listar_comentarios(codigo):
 @app.route('/api/tarefas/<int:codigo>/comentarios', methods=['POST'])
 @login_required
 def adicionar_comentario(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
         return jsonify({'erro': 'Tarefa nao encontrada'}), 404
     if usuario.empresa and tarefa.empresa != usuario.empresa:
         return jsonify({'erro': 'Acesso negado'}), 403
-    # Colaborativo só comenta em tarefas onde é responsável
     if usuario.tipo_perfil == 'Colaborativo':
         ids_resp = [u.id for u in tarefa.responsaveis]
         if usuario.id not in ids_resp:
             return jsonify({'erro': 'Acesso negado'}), 403
-    # Admin e Admin Master podem comentar em qualquer tarefa da empresa
     texto = request.json.get('texto', '').strip()
     if not texto:
         return jsonify({'erro': 'Comentario nao pode ser vazio'}), 400
@@ -1446,6 +1640,9 @@ def listar_anexos(codigo):
 @app.route('/api/tarefas/<int:codigo>/anexos', methods=['POST'])
 @login_required
 def upload_anexo(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1496,6 +1693,9 @@ def download_anexo(aid):
 @app.route('/api/anexos/<int:aid>', methods=['DELETE'])
 @login_required
 def excluir_anexo(aid):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     anexo   = db.session.get(Anexo, aid)
     usuario = usuario_atual()
     if not anexo:
@@ -1621,7 +1821,6 @@ def relatorio_excel():
     ws = wb.active
     ws.title = 'Pendências'
 
-    # Cores
     COR_HEADER  = 'FF0F172A'
     COR_PESSOA  = 'FF1E3A5F'
     COR_ALT     = 'FFF0F4FF'
@@ -1633,7 +1832,6 @@ def relatorio_excel():
     thin = Side(style='thin', color='FFD0D9E8')
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    # Título
     ws.merge_cells('A1:F1')
     titulo_cell = ws['A1']
     titulo_cell.value = f'Relatório de Pendências — {agora_br().strftime("%d/%m/%Y %H:%M")}'
@@ -1652,7 +1850,6 @@ def relatorio_excel():
         u = item['usuario']
         tarefas = sorted(item['tarefas'], key=lambda t: (0 if t.prioridade == 'Alta' else 1, t.codigo))
 
-        # Linha de pessoa
         ws.merge_cells(f'A{row}:F{row}')
         cell = ws[f'A{row}']
         cell.value = f'  {u.nome}  ·  {u.funcao}{" / " + u.setor if u.setor else ""}  ({len(tarefas)} pendência{"s" if len(tarefas) != 1 else ""})'
@@ -1662,7 +1859,6 @@ def relatorio_excel():
         ws.row_dimensions[row].height = 22
         row += 1
 
-        # Cabeçalho da tabela
         for col, cab in enumerate(colunas, 1):
             c = ws.cell(row=row, column=col, value=cab)
             c.font      = Font(bold=True, color='FF0F172A', size=10)
@@ -1689,7 +1885,7 @@ def relatorio_excel():
                 c.alignment = Alignment(vertical='center', wrap_text=(col == 2))
                 c.border    = border
                 c.font      = Font(size=10)
-                if col == 3:  # Status com cor
+                if col == 3:
                     cor_st = STATUS_COR.get(t.status, 'FF64748b')
                     c.font = Font(size=10, color=cor_st, bold=True)
                 if col == 4 and t.prioridade == 'Alta':
@@ -1697,7 +1893,7 @@ def relatorio_excel():
             ws.row_dimensions[row].height = 16
             row += 1
 
-        row += 1  # linha em branco entre pessoas
+        row += 1
 
     output = io.BytesIO()
     wb.save(output)
@@ -1743,6 +1939,9 @@ def listar_checklist(codigo):
 @app.route('/api/tarefas/<int:codigo>/checklist', methods=['POST'])
 @login_required
 def adicionar_item_checklist(codigo):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1764,6 +1963,9 @@ def adicionar_item_checklist(codigo):
 @app.route('/api/checklist/<int:item_id>', methods=['DELETE'])
 @login_required
 def remover_item_checklist(item_id):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     item    = db.session.get(ChecklistItem, item_id)
     usuario = usuario_atual()
     if not item:
@@ -1781,6 +1983,9 @@ def remover_item_checklist(item_id):
 @app.route('/api/checklist/<int:item_id>/marcar', methods=['PATCH'])
 @login_required
 def marcar_item_checklist(item_id):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     item    = db.session.get(ChecklistItem, item_id)
     usuario = usuario_atual()
     if not item:
@@ -1804,7 +2009,6 @@ def marcar_item_checklist(item_id):
 # ─────────────────────────────────────────
 # CHANGELOG ROUTES
 # ─────────────────────────────────────────
-
 @app.route('/api/changelog', methods=['GET'])
 @login_required
 def listar_changelog():
@@ -1815,6 +2019,9 @@ def listar_changelog():
 @app.route('/api/changelog', methods=['POST'])
 @login_required
 def criar_changelog():
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     usuario = usuario_atual()
     if not usuario.is_admin():
         return jsonify({'erro': 'Apenas administradores podem adicionar entradas'}), 403
@@ -1843,6 +2050,9 @@ def criar_changelog():
 @app.route('/api/changelog/<int:entry_id>', methods=['DELETE'])
 @login_required
 def excluir_changelog(entry_id):
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     usuario = usuario_atual()
     if not usuario.is_admin():
         return jsonify({'erro': 'Apenas administradores podem excluir entradas'}), 403
@@ -1860,6 +2070,9 @@ def excluir_changelog(entry_id):
 @app.route('/api/tickets', methods=['POST'])
 @login_required
 def criar_ticket():
+    bloqueio = bloquear_se_demo()
+    if bloqueio: return bloqueio
+
     u     = usuario_atual()
     dados = request.json or {}
     tipo  = dados.get('tipo', '').strip()
@@ -1873,7 +2086,7 @@ def criar_ticket():
         descricao=desc,
         empresa=u.empresa,
         criado_por=u.id,
-        criado_em=agora_br(),   # explícito — evita None quando default não é chamado pelo ORM
+        criado_em=agora_br(),
         status='aberto'
     )
     db.session.add(t)
@@ -1926,6 +2139,182 @@ def excluir_ticket(tid):
     db.session.delete(ticket)
     safe_commit()
     return jsonify({'mensagem': 'Ticket excluído'})
+
+
+# ─────────────────────────────────────────
+# DEMO MODE
+# ─────────────────────────────────────────
+def get_usuario_demo():
+    return Usuario.query.filter_by(email='demo@taskflow.com').first()
+
+
+def usuario_eh_demo():
+    user_id = session.get('usuario_id')
+    if not user_id:
+        return False
+    user = db.session.get(Usuario, user_id)
+    return user is not None and user.email == 'demo@taskflow.com'
+
+
+def bloquear_se_demo():
+    """Retorna erro 403 se o usuário logado for o demo, ou None se puder continuar."""
+    if usuario_eh_demo():
+        return jsonify({'erro': 'Modo demonstração não permite alterações'}), 403
+    return None
+
+
+def criar_usuario_demo():
+    user = get_usuario_demo()
+    if not user:
+        user = Usuario(
+            nome='Usuário Demo',
+            funcao='Gerente de Projetos',
+            email='demo@taskflow.com',
+            tipo_perfil='Administrador',
+            trocar_senha=False,
+            empresa='Demo Ltda',
+            setor='Tecnologia'
+        )
+        user.definir_senha('demo123')
+        db.session.add(user)
+        db.session.commit()
+    return user
+
+
+def criar_dados_demo(user_id):
+    """Cria tarefas, colaborativos, comentários e checklist de exemplo para o demo."""
+    if Tarefa.query.filter_by(criado_por=user_id).first():
+        return  # Já existe — não recria
+
+    # Colaborativos fictícios
+    colabs_data = [
+        {'nome': 'Ana Lima',    'funcao': 'Desenvolvedora', 'email': 'ana.demo@taskflow.com',     'setor': 'TI'},
+        {'nome': 'Carlos Melo', 'funcao': 'Designer',       'email': 'carlos.demo@taskflow.com',  'setor': 'Design'},
+        {'nome': 'Juliana Paz', 'funcao': 'Analista QA',    'email': 'juliana.demo@taskflow.com', 'setor': 'Qualidade'},
+    ]
+    colabs = []
+    for cd in colabs_data:
+        c = Usuario.query.filter_by(email=cd['email']).first()
+        if not c:
+            c = Usuario(
+                nome=cd['nome'], funcao=cd['funcao'], email=cd['email'],
+                tipo_perfil='Colaborativo', trocar_senha=False,
+                empresa='Demo Ltda', setor=cd['setor']
+            )
+            c.definir_senha('Demo@1234')
+            db.session.add(c)
+        colabs.append(c)
+    db.session.flush()
+
+    from datetime import date, timedelta
+    hoje = agora_br().date()
+
+    tarefas_spec = [
+        {
+            'descricao':   'Aprovar layout do sistema',
+            'status':      'Em andamento',
+            'prioridade':  'Alta',
+            'data_prazo':  hoje + timedelta(days=2),
+            'resps':       [0],
+            'checklist':   ['Revisar protótipo no Figma', 'Validar paleta de cores', 'Confirmar tipografia'],
+            'comentarios': ['Protótipo enviado para revisão.', 'Aguardando aprovação final do cliente.'],
+        },
+        {
+            'descricao':   'Revisar relatórios financeiros',
+            'status':      'Não iniciado',
+            'prioridade':  'Nenhuma',
+            'data_prazo':  hoje + timedelta(days=10),
+            'resps':       [2],
+            'checklist':   ['Consolidar planilhas Q1', 'Conferir conciliação bancária'],
+            'comentarios': ['Documentos recebidos do financeiro.'],
+        },
+        {
+            'descricao':   'Deploy da aplicação em produção',
+            'status':      'Finalizado',
+            'prioridade':  'Alta',
+            'data_prazo':  hoje - timedelta(days=3),
+            'resps':       [0, 1],
+            'checklist':   ['Rodar testes de regressão', 'Fazer backup do banco', 'Executar deploy'],
+            'comentarios': ['Deploy realizado com sucesso!'],
+        },
+        {
+            'descricao':   'Organizar backlog do projeto',
+            'status':      'Pausado',
+            'prioridade':  'Nenhuma',
+            'data_prazo':  hoje + timedelta(days=7),
+            'resps':       [1],
+            'checklist':   ['Priorizar épicos', 'Estimar story points'],
+            'comentarios': ['Aguardando reunião de refinamento.'],
+        },
+        {
+            'descricao':   'Implementar autenticação SSO',
+            'status':      'Iniciado',
+            'prioridade':  'Alta',
+            'data_prazo':  hoje + timedelta(days=5),
+            'resps':       [0],
+            'checklist':   ['Estudar provider OAuth', 'Configurar callback', 'Testar fluxo de login'],
+            'comentarios': [],
+        },
+        {
+            'descricao':   'Criar documentação da API',
+            'status':      'Aguardo retorno',
+            'prioridade':  'Nenhuma',
+            'data_prazo':  hoje + timedelta(days=14),
+            'resps':       [2],
+            'checklist':   ['Mapear endpoints', 'Escrever exemplos de requisição'],
+            'comentarios': ['Aguardando retorno do time de back-end.'],
+        },
+    ]
+
+    for spec in tarefas_spec:
+        t = Tarefa(
+            descricao=spec['descricao'],
+            status=spec['status'],
+            prioridade=spec['prioridade'],
+            criado_por=user_id,
+            empresa='Demo Ltda',
+            compartilhada=bool(spec['resps']),
+            data_prazo=spec.get('data_prazo'),
+        )
+        db.session.add(t)
+        db.session.flush()
+
+        for idx in spec['resps']:
+            if idx < len(colabs):
+                t.responsaveis.append(colabs[idx])
+
+        for ordem, texto_ck in enumerate(spec['checklist'], 1):
+            concluido = spec['status'] == 'Finalizado'
+            item = ChecklistItem(
+                id_tarefa=t.codigo, texto=texto_ck, ordem=ordem,
+                concluido=concluido,
+                concluido_por=user_id if concluido else None,
+                concluido_em=agora_br() if concluido else None,
+                criado_por=user_id
+            )
+            db.session.add(item)
+
+        for texto_cm in spec['comentarios']:
+            cm = Comentario(
+                id_tarefa=t.codigo, id_usuario=user_id,
+                texto=texto_cm, tipo='comentario'
+            )
+            db.session.add(cm)
+
+        db.session.add(Comentario(
+            id_tarefa=t.codigo, id_usuario=user_id,
+            texto=f'Tarefa criada por Usuário Demo.', tipo='historico'
+        ))
+
+    db.session.commit()
+
+
+@app.route('/api/demo-login', methods=['POST'])
+def demo_login():
+    user = criar_usuario_demo()
+    criar_dados_demo(user.id)
+    session['usuario_id'] = user.id
+    return jsonify(user.to_dict())
 
 
 if __name__ == '__main__':
