@@ -2187,4 +2187,5 @@ window.entrarDemo = async function (btn) {
         btn.textContent = '👁️ Ver demonstração';
         btn.disabled = false;
     }
+    document.getElementById('screen-login').style.display = 'none';
 };
