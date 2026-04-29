@@ -32,8 +32,15 @@ function isMaster() { return usuarioLogado && usuarioLogado.tipo_perfil === 'Adm
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await api('/api/me');
+
         if (res.ok) {
             usuarioLogado = await res.json();
+
+            entrarNoApp(); // 🔥 ESSENCIAL
+
+            const btnDemo = document.getElementById('btn-demo');
+            if (btnDemo) btnDemo.style.display = 'none';
+
             verificarTrocaSenha();
         }
     } catch {}
@@ -46,12 +53,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/static/sw.js').catch(() => {});
-    }
-    const btnDemo = document.getElementById('btn-demo');
-
-    // se já estiver logado, esconde
-    if (btnDemo && document.getElementById('screen-app').classList.contains('active')) {
-        btnDemo.style.display = 'none';
     }
 });
 
