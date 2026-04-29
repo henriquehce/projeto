@@ -2186,10 +2186,11 @@ async function entrarDemo() {
     }
 }
 
-window.entrarDemo = async function () {
-    console.log('demo clicado'); // debug
+window.entrarDemo = async function (event) {
+    console.log('demo clicado');
 
-    const btn = document.querySelector('#screen-login .btn-ghost');
+    const btn = event.target;
+
     btn.textContent = 'Carregando demo...';
     btn.disabled = true;
 
