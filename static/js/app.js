@@ -2185,3 +2185,28 @@ async function entrarDemo() {
         btn.disabled = false;
     }
 }
+
+window.entrarDemo = async function () {
+    console.log('demo clicado'); // debug
+
+    const btn = document.querySelector('#screen-login .btn-ghost');
+    btn.textContent = 'Carregando demo...';
+    btn.disabled = true;
+
+    try {
+        const res = await api('/api/demo-login', 'POST');
+
+        if (res.ok) {
+            usuarioLogado = await res.json();
+            entrarNoApp();
+        } else {
+            mostrarErroLogin('Erro ao iniciar demo.');
+        }
+    } catch (e) {
+        console.error(e);
+        mostrarErroLogin('Erro de conexão (demo).');
+    } finally {
+        btn.textContent = '👁️ Ver demonstração';
+        btn.disabled = false;
+    }
+};
