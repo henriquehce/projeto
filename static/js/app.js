@@ -125,10 +125,7 @@ async function fazerLogout() {
     document.getElementById('login-email').value = '';
     document.getElementById('login-senha').value = '';
     document.getElementById('login-error').style.display = 'none';
-    const btnDemo = document.getElementById('btn-demo');
-if (btnDemo) btnDemo.style.display = 'block';
     fecharUserMenu();
-    
 }
 
 // ─────────────────────────────────────────
@@ -241,8 +238,7 @@ function entrarNoApp() {
     const master = isMaster();
     document.getElementById('screen-login').classList.remove('active');
     document.getElementById('screen-app').classList.add('active');
-    const btnDemo = document.getElementById('btn-demo');
-    if (btnDemo) btnDemo.style.display = 'none';
+
     const badge = document.getElementById('header-badge');
     if (master) {
         badge.textContent = 'Admin Master';
@@ -2167,33 +2163,3 @@ async function salvarTicket() {
         toast(e.erro || 'Erro', 'error');
     }
 }
-
-window.entrarDemo = async function (btn) {
-    console.log('demo clicado');
-
-    btn.textContent = 'Carregando demo...';
-    btn.disabled = true;
-
-    try {
-        const res = await api('/api/demo-login', 'POST');
-
-        if (res.ok) {
-            usuarioLogado = await res.json();
-
-            // 🔥 marca como demo (opcional)
-            if (usuarioLogado.email === 'demo@taskflow.com') {
-                document.body.classList.add('modo-demo');
-            }
-
-            entrarNoApp();
-        } else {
-            mostrarErroLogin('Erro ao iniciar demo.');
-        }
-    } catch (e) {
-        console.error(e);
-        mostrarErroLogin('Erro de conexão (demo).');
-    } finally {
-        btn.textContent = '👁️ Ver demonstração';
-        btn.disabled = false;
-    }
-};
