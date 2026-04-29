@@ -47,6 +47,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/static/sw.js').catch(() => {});
     }
+    const btnDemo = document.getElementById('btn-demo');
+
+    // se já estiver logado, esconde
+    if (btnDemo && document.getElementById('screen-app').classList.contains('active')) {
+        btnDemo.style.display = 'none';
+    }
 });
 
 // ─────────────────────────────────────────
@@ -125,7 +131,10 @@ async function fazerLogout() {
     document.getElementById('login-email').value = '';
     document.getElementById('login-senha').value = '';
     document.getElementById('login-error').style.display = 'none';
+    const btnDemo = document.getElementById('btn-demo');
+    if (btnDemo) btnDemo.style.display = 'block';
     fecharUserMenu();
+    
 }
 
 // ─────────────────────────────────────────
@@ -238,7 +247,8 @@ function entrarNoApp() {
     const master = isMaster();
     document.getElementById('screen-login').classList.remove('active');
     document.getElementById('screen-app').classList.add('active');
-
+    const btnDemo = document.getElementById('btn-demo');
+    if (btnDemo) btnDemo.style.display = 'none';
     const badge = document.getElementById('header-badge');
     if (master) {
         badge.textContent = 'Admin Master';
@@ -2169,13 +2179,18 @@ window.entrarDemo = async function (btn) {
 
     btn.textContent = 'Carregando demo...';
     btn.disabled = true;
-    btn.style.display = 'none';
 
     try {
         const res = await api('/api/demo-login', 'POST');
 
         if (res.ok) {
             usuarioLogado = await res.json();
+
+            // 🔥 marca como demo (opcional)
+            if (usuarioLogado.email === 'demo@taskflow.com') {
+                document.body.classList.add('modo-demo');
+            }
+
             entrarNoApp();
         } else {
             mostrarErroLogin('Erro ao iniciar demo.');
@@ -2187,5 +2202,4 @@ window.entrarDemo = async function (btn) {
         btn.textContent = '👁️ Ver demonstração';
         btn.disabled = false;
     }
-    document.getElementById('screen-login').style.display = 'none';
 };
