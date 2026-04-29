@@ -2169,6 +2169,7 @@ window.entrarDemo = async function (btn) {
 
     btn.textContent = 'Carregando demo...';
     btn.disabled = true;
+    btn.style.display = 'none';
 
     try {
         const res = await api('/api/demo-login', 'POST');
