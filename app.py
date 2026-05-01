@@ -587,6 +587,21 @@ def index():
 # ─────────────────────────────────────────
 # AUTENTICACAO
 # ─────────────────────────────────────────
+DEMO_EMAIL = 'demo@taskflow.com'
+
+def is_demo():
+    """Retorna True se o usuário logado é a conta demo (read-only)."""
+    uid = session.get('usuario_id')
+    if not uid:
+        return False
+    u = db.session.get(Usuario, uid)
+    return u and u.email == DEMO_EMAIL
+
+def demo_blocked():
+    """Retorna resposta de bloqueio para ações de escrita em modo demo."""
+    return jsonify({'erro': '🔒 Modo demo — apenas visualização. Crie sua conta para ter acesso completo!'}), 403
+
+
 @app.route('/api/login', methods=['POST'])
 def login():
     dados = request.json
@@ -607,6 +622,16 @@ def login():
 def logout():
     session.clear()
     return jsonify({'mensagem': 'Logout realizado'}), 200
+
+
+@app.route('/api/demo-login', methods=['POST'])
+def demo_login():
+    """Login automático na conta demo (read-only)."""
+    u = Usuario.query.filter_by(email=DEMO_EMAIL).first()
+    if not u:
+        return jsonify({'erro': 'Conta demo não configurada. Peça ao administrador para criar o usuário demo@taskflow.com'}), 404
+    session['usuario_id'] = u.id
+    return jsonify(u.to_dict()), 200
 
 
 @app.route('/api/me', methods=['GET'])
@@ -633,6 +658,7 @@ def ping():
 @app.route('/api/trocar-senha', methods=['POST'])
 @login_required
 def trocar_senha():
+    if is_demo(): return demo_blocked()
     dados       = request.json
     senha_atual = dados.get('senha_atual', '')
     senha_nova  = dados.get('senha_nova', '')
@@ -759,6 +785,7 @@ def listar_admins():
 @app.route('/api/usuarios', methods=['POST'])
 @admin_required
 def criar_usuario():
+    if is_demo(): return demo_blocked()
     dados = request.json
     for campo in ['nome', 'funcao', 'email', 'tipo_perfil', 'senha']:
         if not dados.get(campo):
@@ -1110,6 +1137,7 @@ def listar_lixeira():
 @app.route('/api/tarefas', methods=['POST'])
 @admin_required
 def criar_tarefa():
+    if is_demo(): return demo_blocked()
     dados = request.json
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descricao obrigatoria'}), 400
@@ -1159,6 +1187,7 @@ def criar_tarefa():
 @app.route('/api/tarefas/<int:codigo>', methods=['DELETE'])
 @admin_required
 def excluir_tarefa(codigo):
+    if is_demo(): return demo_blocked()
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1176,6 +1205,7 @@ def excluir_tarefa(codigo):
 @app.route('/api/tarefas/<int:codigo>/restaurar', methods=['POST'])
 @admin_required
 def restaurar_tarefa(codigo):
+    if is_demo(): return demo_blocked()
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or not tarefa.deletado_em:
@@ -1191,6 +1221,7 @@ def restaurar_tarefa(codigo):
 @app.route('/api/tarefas/<int:codigo>/permanente', methods=['DELETE'])
 @admin_required
 def excluir_permanente(codigo):
+    if is_demo(): return demo_blocked()
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa:
@@ -1205,6 +1236,7 @@ def excluir_permanente(codigo):
 @app.route('/api/tarefas/<int:codigo>/status', methods=['PATCH'])
 @login_required
 def atualizar_status(codigo):
+    if is_demo(): return demo_blocked()
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1277,6 +1309,7 @@ def atualizar_status(codigo):
 @app.route('/api/tarefas/<int:codigo>/prioridade', methods=['PATCH'])
 @admin_required
 def atualizar_prioridade(codigo):
+    if is_demo(): return demo_blocked()
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1294,6 +1327,7 @@ def atualizar_prioridade(codigo):
 @app.route('/api/tarefas/<int:codigo>/responsaveis', methods=['PUT'])
 @admin_required
 def atualizar_responsaveis(codigo):
+    if is_demo(): return demo_blocked()
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1328,6 +1362,7 @@ def atualizar_responsaveis(codigo):
 @app.route('/api/tarefas/<int:codigo>/admins', methods=['PUT'])
 @admin_required
 def atualizar_admins_colab(codigo):
+    if is_demo(): return demo_blocked()
     tarefa = db.session.get(Tarefa, codigo)
     admin  = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1370,6 +1405,7 @@ def listar_comentarios(codigo):
 @app.route('/api/tarefas/<int:codigo>/comentarios', methods=['POST'])
 @login_required
 def adicionar_comentario(codigo):
+    if is_demo(): return demo_blocked()
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1446,6 +1482,7 @@ def listar_anexos(codigo):
 @app.route('/api/tarefas/<int:codigo>/anexos', methods=['POST'])
 @login_required
 def upload_anexo(codigo):
+    if is_demo(): return demo_blocked()
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1743,6 +1780,7 @@ def listar_checklist(codigo):
 @app.route('/api/tarefas/<int:codigo>/checklist', methods=['POST'])
 @login_required
 def adicionar_item_checklist(codigo):
+    if is_demo(): return demo_blocked()
     tarefa  = db.session.get(Tarefa, codigo)
     usuario = usuario_atual()
     if not tarefa or tarefa.deletado_em:
@@ -1781,6 +1819,7 @@ def remover_item_checklist(item_id):
 @app.route('/api/checklist/<int:item_id>/marcar', methods=['PATCH'])
 @login_required
 def marcar_item_checklist(item_id):
+    if is_demo(): return demo_blocked()
     item    = db.session.get(ChecklistItem, item_id)
     usuario = usuario_atual()
     if not item:
@@ -1815,6 +1854,7 @@ def listar_changelog():
 @app.route('/api/changelog', methods=['POST'])
 @login_required
 def criar_changelog():
+    if is_demo(): return demo_blocked()
     usuario = usuario_atual()
     if not usuario.is_admin():
         return jsonify({'erro': 'Apenas administradores podem adicionar entradas'}), 403
@@ -1860,6 +1900,7 @@ def excluir_changelog(entry_id):
 @app.route('/api/tickets', methods=['POST'])
 @login_required
 def criar_ticket():
+    if is_demo(): return demo_blocked()
     u     = usuario_atual()
     dados = request.json or {}
     tipo  = dados.get('tipo', '').strip()
@@ -1895,6 +1936,7 @@ def listar_tickets():
 @app.route('/api/tickets/<int:tid>', methods=['PATCH'])
 @login_required
 def atualizar_ticket(tid):
+    if is_demo(): return demo_blocked()
     u = usuario_atual()
     if not u.is_master():
         return jsonify({'erro': 'Acesso negado'}), 403

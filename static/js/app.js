@@ -61,6 +61,24 @@ async function api(url, method = 'GET', body = null) {
 // ─────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────
+async function entrarDemo() {
+    const btn = document.querySelector('.btn-demo');
+    if (btn) { btn.textContent = 'Carregando...'; btn.disabled = true; }
+    try {
+        const res = await api('/api/demo-login', 'POST');
+        if (res.ok) {
+            usuarioLogado = await res.json();
+            entrarNoApp();
+        } else {
+            const e = await res.json();
+            mostrarErroLogin(e.erro || 'Demo indisponível');
+        }
+    } catch { mostrarErroLogin('Erro de conexão.'); }
+    finally {
+        if (btn) { btn.innerHTML = '<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Ver demonstração'; btn.disabled = false; }
+    }
+}
+
 async function realizarLogin() {
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
@@ -265,6 +283,12 @@ function entrarNoApp() {
 
     iniciarOnline();
     if (master) atualizarBadgeTickets();
+
+    // Banner demo
+    const isDemo = usuarioLogado.email === 'demo@taskflow.com';
+    const banner = document.getElementById('demo-banner');
+    if (banner) banner.style.display = isDemo ? 'flex' : 'none';
+
     navTo('tarefas');
     carregarTarefas();
 }
