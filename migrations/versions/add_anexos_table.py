@@ -1,14 +1,14 @@
 """add tabela anexos
 
 Revision ID: add_anexos_table
-Revises: add_empresa_setor
+Revises: add_admin_master
 Create Date: 2026-02-26
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = 'add_anexos_table'
-down_revision = 'add_empresa_setor'
+down_revision = 'add_admin_master'
 branch_labels = None
 depends_on = None
 

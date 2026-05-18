@@ -4,8 +4,8 @@
 ═══════════════════════════════════════ */
 
 const CACHE_NAME    = 'taskflow-v1';
-const CACHE_STATIC  = 'taskflow-static-v1';
-
+const CACHE_STATIC  = 'taskflow-static-v2';
+    
 // Arquivos essenciais para cachear (shell do app)
 const STATIC_ASSETS = [
     '/',
